@@ -1,0 +1,14 @@
+{application, amoveo_miner,
+ [
+  {description, "blockchain miner"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {modules, []},
+  {mod, []},
+  {env, [
+	]}
+ ]}.

@@ -9,60 +9,62 @@
 WORD hash2integer(BYTE h[32]);
 static WORD pair2sci(WORD l[2]);
 static BYTE* next_nonce(BYTE nonce[32]);
-int check_pow(BYTE nonce[32], int, BYTE data[32]);
-BYTE* mine(BYTE nonce[32], int, BYTE data[32]);
+int check_pow(BYTE nonce[32], int, int, BYTE data[32]);
+BYTE* mine(BYTE nonce[32], int, int, BYTE data[32]);
 void test_hash();
 void test_hash2integer();
 void test_check_pow();
+void mine_test(BYTE nonce[32], int difficulty, BYTE data[32]);
 
 WORD hash2integer(BYTE h[32]) {
   WORD x = 0;
-  WORD y[2];
+  WORD y;
+  BYTE hi;
   for (int i = 0; i < 31; i++) {
-    if (h[i] == 0) {
+    hi = h[i];
+    if (hi == 0) {
       x += 8;
-      y[1] = h[i+1];
+      y = h[i+1];
       continue;
-    } else if (h[i] < 2) {
+    } else if (hi < 2) {
       x += 7;
-      y[1] = (h[i] * 128) + (h[i+1] / 2);
-    } else if (h[i] < 4) {
+      y = (hi * 128) + (h[i+1] / 2);
+    } else if (hi < 4) {
       x += 6;
-      y[1] = (h[i] * 64) + (h[i+1] / 4);
-    } else if (h[i] < 8) {
+      y = (hi * 64) + (h[i+1] / 4);
+    } else if (hi < 8) {
       x += 5;
-      y[1] = (h[i] * 32) + (h[i+1] / 8);
-    } else if (h[i] < 16) {
+      y = (hi * 32) + (h[i+1] / 8);
+    } else if (hi < 16) {
       x += 4;
-      y[1] = (h[i] * 16) + (h[i+1] / 16);
-    } else if (h[i] < 32) {
+      y = (hi * 16) + (h[i+1] / 16);
+    } else if (hi < 32) {
       x += 3;
-      y[1] = (h[i] * 8) + (h[i+1] / 32);
-    } else if (h[i] < 64) {
+      y = (hi * 8) + (h[i+1] / 32);
+    } else if (hi < 64) {
       x += 2;
-      y[1] = (h[i] * 4) + (h[i+1] / 64);
-    } else if (h[i] < 128) {
+      y = (hi * 4) + (h[i+1] / 64);
+    } else if (hi < 128) {
       x += 1;
-      y[1] = (h[i] * 2) + (h[i+1] / 128);
+      y = (hi * 2) + (h[i+1] / 128);
     } else {
-      y[1] = h[i];
+      y = hi;
     }
     break;
   }
-  y[0] = x;
-  return(pair2sci(y));
+  return ((256 * x) + y);
 }
-static WORD pair2sci(WORD l[2]) {
-  return((256*l[0]) + l[1]);
-}
-int check_pow(BYTE nonce[32], int difficulty, BYTE data[32]) {
+
+int check_pow(BYTE nonce[32], int difficulty, int share_difficulty, BYTE data[32]) {
   BYTE text[66];//32+2+32
-  for (int i = 0; i < 32; i++) 
+  for (int i = 0; i < 32; i++) {
     text[i] = data[i];
+  }
   text[32] = difficulty / 256;
   text[33] = difficulty % 256;
-  for (int i = 0; i < 32; i++) 
+  for (int i = 0; i < 32; i++) {
     text[i+34] = nonce[i];
+  }
   SHA256_CTX ctx;
   sha256_init(&ctx);
   sha256_update(&ctx, text, 66);
@@ -70,8 +72,9 @@ int check_pow(BYTE nonce[32], int difficulty, BYTE data[32]) {
   sha256_final(&ctx, buf);
   int i = hash2integer(buf);
   //printf("pow did this much work %d \n", i);
-  return(i > difficulty);
+  return(i > share_difficulty);
 }
+
 static BYTE* next_nonce(BYTE nonce[32]){
   //we should use 32 bit or 64 bit integer
   for (int i = 0; i < 32; i++) {
@@ -84,19 +87,15 @@ static BYTE* next_nonce(BYTE nonce[32]){
   }
   return(0);
 }
-BYTE* mine(BYTE nonce[32], int difficulty, BYTE data[32]) {
+
+BYTE* mine(BYTE nonce[32], int difficulty, int share_difficulty, BYTE data[32]) {
   while (1) {
-    if (check_pow(nonce, difficulty, data)) 
+    if (check_pow(nonce, difficulty, share_difficulty, data))
       return nonce;
     nonce = next_nonce(nonce);
   }
 }
-void mine_test(BYTE nonce[32], int difficulty, BYTE data[32]) {
-  for (int i = 0; i < 1000000; i++) {
-    check_pow(nonce, 10000, data);
-    nonce = next_nonce(nonce);
-  }
-}
+
 void write_nonce(BYTE x[32]) {
   FILE *f = fopen("nonce.txt", "w");
   if (f == NULL) {
@@ -108,13 +107,14 @@ void write_nonce(BYTE x[32]) {
   fclose(f);
   return;
 }
+
 int read_input(BYTE B[32], BYTE N[32], WORD id) {
   FILE *fileptr;
   fileptr = fopen("mining_input", "rb");
   fseek(fileptr, 0, SEEK_END);  // Jump to the end of the file
   int filelen = ftell(fileptr); // Get the current byte offset in the file
   //ftell returns a long, maybe we shouldn't truncate it.
-  rewind(fileptr); 
+  rewind(fileptr);
   fread(B, 32, 1, fileptr);
   fread(N, 32, 1, fileptr);
   N[28] = id % 256;
@@ -136,37 +136,35 @@ int read_input(BYTE B[32], BYTE N[32], WORD id) {
   fclose(fileptr); // Close the file
   return diff;
 }
-int main(int argc, char *argv[])
+
+BYTE * start_mine(BYTE bhash[32], BYTE nonce[32], WORD block_diff, WORD share_diff, WORD id)
 {
-  BYTE bhash[32];
-  BYTE nonce[32];
-  WORD id;
-  if (argc > 1) {
-    id = atoi(argv[1]);
-  } else {
-    id = 0;
-  }
-  //printf("argc is %i\n", argc);
-  //printf("id is %i\n", id);
-  int diff = read_input(bhash, nonce, id);
-  if (diff < 10) {
-    printf("speed test starting\n");
+  if (block_diff < 10) {
+    fprintf(stderr, "speed test starting\n");
     clock_t begin = clock();
-    mine_test(nonce, diff, bhash);/* here, do your time-consuming job */
+    mine_test(nonce, block_diff, bhash);/* here, do your time-consuming job */
     clock_t end = clock();
     double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
     double speed = 1 / time_spent;
-    printf("speed result: %f megahashes per second per CPU\n", speed);
+    fprintf(stderr, "speed result: %f megahashes per second per CPU\n", speed);
     return(0);
-  } 
-  printf("difficulty is %i\n", diff);
-  mine(nonce, diff, bhash); //nonce, difficulty, data
-  write_nonce(nonce);
+  }
+//  fprintf(stderr, "difficulty is %i\n\r", block_diff);
+  mine(nonce, block_diff, share_diff, bhash); //nonce, difficulty, data
+//  write_nonce(nonce);
   //test_check_pow();
   //test_hash();
   //test_hash2integer();
-  return(0);
+  return(nonce);
 }
+
+void mine_test(BYTE nonce[32], int difficulty, BYTE data[32]) {
+  for (int i = 0; i < 1000000; i++) {
+    check_pow(nonce, 10000, 10000, data);
+    nonce = next_nonce(nonce);
+  }
+}
+
 void test_check_pow() {
   //["pow","2w1EW/I07ZnVg8hK4TzPEUA2XXyh2MpdyLgntn/42dI=",6452,995842502870377667814772]
   static BYTE data[32] = {
@@ -177,11 +175,12 @@ void test_check_pow() {
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,210,224,186,
     241,224,230,139,188,229,116
   };
-  int out = check_pow(nonce, 6452, data);
+  int out = check_pow(nonce, 12000, 6452, data);
   printf("check pow gave %i\n", out);
   //should be a 1.
   return;
 }
+
 void test_hash() {
   BYTE bhash[66] = {0};
   SHA256_CTX ctx;
