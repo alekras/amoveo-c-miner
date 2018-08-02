@@ -1,96 +1,163 @@
 #include <iostream>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+//#include <string.h>
+//#include <netinet/in.h>
+#include <sys/time.h>
+#include <unistd.h>
+
 #include "sha256.h"
 
-extern "C" BYTE * start_mine(BYTE bhash[32], BYTE nonce[32], WORD bdiff, WORD sdiff, WORD id);
-
-int is_big_endian(void)
-{
-    union {
-        uint32_t i;
-        char c[4];
-    } bint = {0x01020304};
-
-    return bint.c[0] == 1;
+extern "C" {
+  char amoveo_update_gpu(BYTE *nonce, BYTE *data);
+  char amoveo_stop_gpu(BYTE *nonce, BYTE *data);
+  void amoveo_hash_gpu(BYTE *data, WORD len, BYTE *hash, WORD cycle);
+  void amoveo_gpu_alloc_mem();
+  void amoveo_gpu_free_mem();
+  void amoveo_mine_gpu(BYTE nonce[23],
+                       WORD difficulty,
+                       BYTE data[32],
+                       WORD GDIM,
+                       WORD BDIM,
+                       WORD id);
+  FILE *fdebug;
 }
 
-uint32_t swapByteOrder(uint32_t ui)
-{
-    ui = (ui >> 24) |
-         ((ui<<8) & 0x00FF0000) |
-         ((ui>>8) & 0x0000FF00) |
-         (ui << 24);
-    return ui;
+int is_big_endian(void) {
+  union {
+    uint32_t i;
+    char c[4];
+  } bint = {0x01020304};
+
+  return bint.c[0] == 1;
 }
 
-uint32_t read_32b_integer(std::istream& s)
-{
-    uint32_t value;
-    s.read(reinterpret_cast<char*>(&value), sizeof(value));
-    if (!is_big_endian())
-        value = swapByteOrder(value);
+uint32_t swapByteOrder(uint32_t ui) {
+  ui = (ui >> 24) |
+       ((ui<<8) & 0x00FF0000) |
+       ((ui>>8) & 0x0000FF00) |
+       (ui << 24);
+  return ui;
+}
+
+uint32_t read_32b_integer(std::istream& s) {
+  uint32_t value;
+  s.read(reinterpret_cast<char*>(&value), sizeof(value));
+  if (!is_big_endian()) {
+    value = swapByteOrder(value);
+  }
 //    std::cerr << 'v' << value << "\n\r";
 //    std::cerr.flush();
-    return value;
+  return value;
 }
 
-std::ostream&  write_32b_integer(std::ostream& s, uint32_t len)
-{
+std::ostream&  write_32b_integer(std::ostream& s, uint32_t len) {
 //    std::cerr << 'w' << len << "\n\r";
 //    std::cerr.flush();
 
-    if (!is_big_endian())
-        len = swapByteOrder(len);
-    s.write(reinterpret_cast<char*>(&len), sizeof(len));
-    return s;
+  if (!is_big_endian()) {
+    len = swapByteOrder(len);
+  }
+  s.write(reinterpret_cast<char*>(&len), sizeof(len));
+  return s;
 }
 
-int main(void)
-{
-    // Helps to detect std::cin closing
-    std::cin.exceptions ( std::istream::failbit | std::istream::badbit );
-    try {
+int main(int argc, char **argv) {
+  char debugfilename[16];
+  WORD GDIM = 64, BDIM = 512;
+  struct timeval t_start, t_end;
+  sprintf(debugfilename,"debug%s.txt",argv[1]); //id);
+  fdebug = fopen(debugfilename,"w");
 
-    // Read messages from Erlang port
+  BYTE success, command;
+  WORD len, block_diff, share_diff,
+       id = (WORD) strtol(argv[1], (char **)0, 10);
+  BYTE* bhash = new BYTE[32];
+  BYTE* nonce = new BYTE[23];
+// Helps to detect std::cin closing
+  std::cin.exceptions ( std::istream::failbit | std::istream::badbit );
+
+  fprintf(fdebug,"--Start Erlang Port-- argc = %d argv[0] = %s argv[1] = %s ID = %d\n",
+      argc, argv[0], argv[1], id);
+  fflush(fdebug);
+
+  try {
+    amoveo_gpu_alloc_mem();
+// Read messages from Erlang port
     while(true) {
-        // read packet length, 4 bytes
-        uint32_t len = read_32b_integer(std::cin);
+// read packet length, 4 bytes
+      len = read_32b_integer(std::cin);
+      std::cin.read(reinterpret_cast<char*>(&command), 1);
+//      std::cerr << "PORT: command= " << command << ".\n\r";
+//      std::cerr.flush();
+//      fprintf(fdebug,"PORT: fprintf() %d\n", command);
+//      fflush(fdebug);
 
-        // read data, 32 bytes
-        BYTE* bhash = new BYTE[32];
+
+      if (command == 'I') {
+// read data, 32 bytes
         std::cin.read((char*)bhash, 32);
+// read data, 23 bytes
+        std::cin.read((char*)nonce, 23);
+// read difficulty, 4 bytes
+        block_diff = read_32b_integer(std::cin);
+// read difficulty, 4 bytes
+        share_diff = read_32b_integer(std::cin);
+// read core_id, 4 bytes
+        id = read_32b_integer(std::cin);
+        gettimeofday(&t_start, NULL);
+//        block_diff = block_diff >> 1;
+        amoveo_mine_gpu(nonce, block_diff, bhash, GDIM, BDIM, id);
+//        std::cerr << "PORT: after command= " << command << ".\n\r";
+//        std::cerr.flush();
+      } else if (command == 'U') {
+        success = (char) amoveo_update_gpu(nonce, bhash);
+//        std::cerr << "PORT: after command= " << command << "; success= " << (int)success << ".\n\r";
+//        std::cerr.flush();
+        if (success) {
+          write_32b_integer(std::cout, 24 + 32);
+          std::cout.write(reinterpret_cast<char*>(&success), 1);
+          std::cout.write((char*)nonce, 23);
+          std::cout.write((char*)bhash, 32);
+          std::cout.flush();
+        } else {
+          write_32b_integer(std::cout, 1);
+          std::cout.write(reinterpret_cast<char*>(&command), 1);
+          std::cout.flush();
+        }
+      } else if (command == 'S') {
+        success = amoveo_stop_gpu(nonce, bhash);
+//        std::cerr << "PORT: after command= " << command << ".\n\r";
+//        std::cerr.flush();
+        gettimeofday(&t_end, NULL);
+//       double numHashes = ((double)GDIM)*((double)GDIM)*((double)BDIM)*((double)(*h_cycles));
+        double total_elapsed = (double)(t_end.tv_usec - t_start.tv_usec) / 1000000 + (double)(t_end.tv_sec - t_start.tv_sec);
 
-        // read data, 32 bytes
-        BYTE* nonce = new BYTE[32];
-        std::cin.read((char*)nonce, 32);
+//        fprintf(fdebug,"PORT:: took time = %0.1f secs\r\n", total_elapsed);
 
-        // read difficulty, 4 bytes
-        uint32_t block_diff = read_32b_integer(std::cin);
-
-        // read difficulty, 4 bytes
-        uint32_t share_diff = read_32b_integer(std::cin);
-
-        // read core_id, 4 bytes
-        uint32_t id = read_32b_integer(std::cin);
-
-        start_mine(bhash, nonce, block_diff, share_diff, id);
-
-        write_32b_integer(std::cout, 32);
-//        std::cout.write(hash, 32);
-        std::cout.write((char*)nonce, 32);
-//        write_32b_integer(std::cout, diff);
-//        write_32b_integer(std::cout, id);
-        std::cout.flush();
-
-        delete[] bhash;
-        delete[] nonce;
+        if (success) {
+          write_32b_integer(std::cout, 24 + 32);
+          std::cout.write(reinterpret_cast<char*>(&success), 1);
+          std::cout.write((char*)nonce, 23);
+          std::cout.write((char*)bhash, 32);
+          std::cout.flush();
+        } else {
+          write_32b_integer(std::cout, 1);
+          std::cout.write(reinterpret_cast<char*>(&command), 1);
+          std::cout.flush();
+        }
+      }
     }
-    } catch ( std::istream::failure e1 ) {
-      std::cerr << "std::cin closed\n\r";
-      std::cerr.flush();
-      return 0;
-    } catch ( std::exception e2 ) {
-      return 0;
-    }
+    amoveo_gpu_free_mem();
+  } catch ( std::istream::failure e1 ) {
+    std::cerr << "PORT: std::cin closed. Big endian= " << is_big_endian() << ".\n\r";
+    std::cerr.flush();
     return 0;
+  } catch ( std::exception e2 ) {
+    return 0;
+  }
+  delete[] bhash;
+  delete[] nonce;
+  return 0;
 }

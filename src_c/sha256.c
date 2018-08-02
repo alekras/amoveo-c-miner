@@ -17,17 +17,6 @@
 #include <memory.h>
 #include "sha256.h"
 
-/****************************** MACROS ******************************/
-#define ROTLEFT(a,b) (((a) << (b)) | ((a) >> (32-(b))))
-#define ROTRIGHT(a,b) (((a) >> (b)) | ((a) << (32-(b))))
-
-#define CH(x,y,z) (((x) & (y)) ^ (~(x) & (z)))
-#define MAJ(x,y,z) (((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)))
-#define EP0(x) (ROTRIGHT(x,2) ^ ROTRIGHT(x,13) ^ ROTRIGHT(x,22))
-#define EP1(x) (ROTRIGHT(x,6) ^ ROTRIGHT(x,11) ^ ROTRIGHT(x,25))
-#define SIG0(x) (ROTRIGHT(x,7) ^ ROTRIGHT(x,18) ^ ((x) >> 3))
-#define SIG1(x) (ROTRIGHT(x,17) ^ ROTRIGHT(x,19) ^ ((x) >> 10))
-
 /**************************** VARIABLES *****************************/
 static const WORD k[64] = {
   0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
@@ -39,6 +28,177 @@ static const WORD k[64] = {
   0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
   0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
 };
+
+unsigned int rotr(unsigned int x, int s) {
+  unsigned long int val = 0;
+  unsigned int *ls = (unsigned int*)&val;
+  unsigned int *ms = ls + 1;
+
+  *ms = x;
+  val = val >> s;
+
+  return *ms | *ls;
+}
+
+unsigned int ep0(unsigned int x) {
+  unsigned long int val = 0;
+  unsigned int *ls = (unsigned int*)&val; //least significant
+  unsigned int *ms = ls + 1;  // least significant
+  unsigned int res;
+
+  *ms = x;
+  val = val >> 2;
+  res = *ms | *ls;
+
+  val = val >> 11;
+  res = res ^ (*ms | *ls);
+
+  val = val >> 9;
+
+  return res ^ (*ms | *ls);
+}
+
+unsigned int ep1(unsigned int x) {
+  unsigned long int val = 0;
+  unsigned int *ls = (unsigned int*)&val;
+  unsigned int *ms = ls + 1;
+  unsigned int res;
+
+  *ms = x;
+  val = val >> 6;
+  res = *ms | *ls;
+
+  val = val >> 5;
+  res = res ^ (*ms | *ls);
+
+  val = val >> 14;
+
+  return res ^ (*ms | *ls);
+}
+
+unsigned int sig0(unsigned int x) {
+  unsigned long int val = 0;
+  unsigned int *ls = (unsigned int*)&val;
+  unsigned int *ms = ls + 1;
+  unsigned int res = 0;
+
+  *ms = x;
+  val = val >> 7;
+  res = *ms | *ls;
+
+  val = val >> 11;
+  res = res ^ (*ms | *ls);
+
+  return res ^ (x >> 3);
+}
+
+unsigned int sig1(unsigned int x) {
+  unsigned long int val = 0;
+  unsigned int *ls = (unsigned int*)&val;
+  unsigned int *ms = ls + 1;
+  unsigned int res = 0;
+
+  *ms = x;
+  val = val >> 17;
+  res = *ms | *ls;
+
+  val = val >> 2;
+  res = res ^ (*ms | *ls);
+
+  return res ^ (x >> 10);
+}
+
+WORD hash2integer(BYTE h[32]) {
+  WORD x = 0;
+  WORD y;
+  BYTE hi;
+  for (int i = 0; i < 31; i++) {
+    hi = h[i];
+
+    if (hi < 16) {
+      if (hi < 4) {
+        if (hi < 2) {
+          if (hi == 0) {
+            // == 0
+            x += 8;
+            y = h[i+1];
+            continue;
+          } else {
+            // == 1
+            x += 7;
+            y = (hi * 128) + (h[i+1] / 2);
+          }
+        } else {
+          // 2..3
+          x += 6;
+          y = (hi * 64) + (h[i+1] / 4);
+        }
+      } else {
+        if (hi < 8) {
+          // == 7..4
+          x += 5;
+          y = (hi * 32) + (h[i+1] / 8);
+        } else {
+          // 15..8
+          x += 4;
+          y = (hi * 16) + (h[i+1] / 16);
+        }
+      }
+    } else { // >= 16
+      if (hi < 64) {
+        if (hi < 32) {
+          // 31..16
+          x += 3;
+          y = (hi * 8) + (h[i+1] / 32);
+        } else {
+          // 63..32
+          x += 2;
+          y = (hi * 4) + (h[i+1] / 64);
+        }
+      } else {
+        if (hi < 128) {
+          // 127..64
+          x += 1;
+          y = (hi * 2) + (h[i+1] / 128);
+        } else {
+          // 255..128
+          y = hi;
+        }
+      }
+    }
+
+//    if (hi == 0) {
+//      x += 8;
+//      y = h[i+1];
+//      continue;
+//    } else if (hi < 2) { // hi == 1
+//      x += 7;
+//      y = (hi * 128) + (h[i+1] / 2);
+//    } else if (hi < 4) { // hi == 2,3
+//      x += 6;
+//      y = (hi * 64) + (h[i+1] / 4);
+//    } else if (hi < 8) { // hi == 7,6,5,4
+//      x += 5;
+//      y = (hi * 32) + (h[i+1] / 8);
+//    } else if (hi < 16) { // hi 15..8
+//      x += 4;
+//      y = (hi * 16) + (h[i+1] / 16);
+//    } else if (hi < 32) { // hi 31..16
+//      x += 3;
+//      y = (hi * 8) + (h[i+1] / 32);
+//    } else if (hi < 64) { // hi 63..32
+//      x += 2;
+//      y = (hi * 4) + (h[i+1] / 64);
+//    } else if (hi < 128) { // hi 127..64
+//      x += 1;
+//      y = (hi * 2) + (h[i+1] / 128);
+//    } else { // hi 255..128
+//      y = hi;
+//    }
+    break;
+  }
+  return ((256 * x) + y);
+}
 
 /*********************** FUNCTION DEFINITIONS ***********************/
 /* data[] converts to ctx->state[]                                  */
@@ -58,13 +218,35 @@ void sha256_init(SHA256_CTX *ctx)
 }
 
 void sha256_transform(SHA256_CTX *ctx, const BYTE data[]) {
+  WORD x, res0, res1;
   WORD a, b, c, d, e, f, g, h, i, j, t1, t2, m[64];
+  BYTE * ptr = (BYTE*)&m,
+      * ptr1 = ptr + 1,
+      * ptr2 = ptr + 2,
+      * ptr3 = ptr + 3,
+      * data_ptr = (BYTE*)data;
 
-  for (i = 0, j = 0; i < 16; ++i, j += 4)
-    m[i] = (data[j] << 24) | (data[j + 1] << 16) | (data[j + 2] << 8) | (data[j + 3]);
-  for ( ; i < 64; ++i)
-    m[i] = SIG1(m[i - 2]) + m[i - 7] + SIG0(m[i - 15]) + m[i - 16];
+  for (i = 0, j = 0; i < 16; ++i, j += 4) {
+    *(ptr3 + j) = *(data_ptr++);
+    *(ptr2 + j) = *(data_ptr++);
+    *(ptr1 + j) = *(data_ptr++);
+    *(ptr + j) = *(data_ptr++);
+  }
+//    m[i] = (data[j] << 24) | (data[j + 1] << 16) | (data[j + 2] << 8) | (data[j + 3]);
+  for ( ; i < 64; ++i) {
+// sig0:
+    x = m[i - 15];
+    res0 = (x >> 7) | (x << 25);
+    res0 ^= (x >>18) | (x << 14);
+    res0 ^= (x >> 3);
+//sig1:
+    x = m[i - 2];
+    res1 = (x >> 17) | (x << 15);
+    res1 ^= (x >> 19) | (x << 13);
+    res1 ^= (x >> 10);
 
+    m[i] = res1 + m[i - 7] + res0 + m[i - 16];
+  }
   a = ctx->state[0];
   b = ctx->state[1];
   c = ctx->state[2];
@@ -75,8 +257,19 @@ void sha256_transform(SHA256_CTX *ctx, const BYTE data[]) {
   h = ctx->state[7];
 
   for (i = 0; i < 64; ++i) {
-    t1 = h + EP1(e) + CH(e,f,g) + k[i] + m[i];
-    t2 = EP0(a) + MAJ(a,b,c);
+// ep0:
+    x = a;
+    res0 = (x >> 2) | (x << 30);
+    res0 ^= (x >> 13) | (x << 19);
+    res0 ^= (x >> 22) | (x << 10);
+// ep1:
+    x = e;
+    res1 = (x >> 6) | (x << 26);
+    res1 ^= (x >> 11) | (x << 21);
+    res1 ^= (x >> 25) | (x << 7);
+
+    t1 = h + res1 + ((e & f) ^ (~e & g)) + k[i] + m[i];
+    t2 = res0 + ((a & b) ^ (a & c) ^ (b & c));
     h = g;
     g = f;
     f = e;
@@ -100,32 +293,29 @@ void sha256_transform(SHA256_CTX *ctx, const BYTE data[]) {
 void sha256_update(SHA256_CTX *ctx, const BYTE data[], size_t len)
 {
   WORD i;
-
+  WORD dl = ctx->datalen;
   for (i = 0; i < len; ++i) {
-    ctx->data[ctx->datalen] = data[i];
-    ctx->datalen++;
-    if (ctx->datalen == 64) {
+    ctx->data[dl] = data[i];
+    dl++;
+    if (dl == 64) {
       sha256_transform(ctx, ctx->data);
       ctx->bitlen += 512;
-      ctx->datalen = 0;
+      dl = 0;
     }
   }
+  ctx->datalen = dl;
 }
 
 void sha256_final(SHA256_CTX *ctx, BYTE hash[])
 {
-  WORD i;
-
-  i = ctx->datalen;
+  WORD i = ctx->datalen;
 
   // Pad whatever data is left in the buffer.
-  if (ctx->datalen < 56) {
-    ctx->data[i++] = 0x80;
+  ctx->data[i++] = 0x80;
+  if (i < 56) {
     while (i < 56)
       ctx->data[i++] = 0x00;
-  }
-  else {
-    ctx->data[i++] = 0x80;
+  } else {
     while (i < 64)
       ctx->data[i++] = 0x00;
     sha256_transform(ctx, ctx->data);
@@ -134,26 +324,28 @@ void sha256_final(SHA256_CTX *ctx, BYTE hash[])
 
   // Append to the padding the total message's length in bits and transform.
   ctx->bitlen += ctx->datalen * 8;
-  ctx->data[63] = ctx->bitlen;
-  ctx->data[62] = ctx->bitlen >> 8;
-  ctx->data[61] = ctx->bitlen >> 16;
-  ctx->data[60] = ctx->bitlen >> 24;
-  ctx->data[59] = ctx->bitlen >> 32;
-  ctx->data[58] = ctx->bitlen >> 40;
-  ctx->data[57] = ctx->bitlen >> 48;
-  ctx->data[56] = ctx->bitlen >> 56;
+  unsigned long long int bl = ctx->bitlen;
+  ctx->data[63] = bl;
+  ctx->data[62] = bl >> 8;
+  ctx->data[61] = bl >> 16;
+  ctx->data[60] = bl >> 24;
+  ctx->data[59] = bl >> 32;
+  ctx->data[58] = bl >> 40;
+  ctx->data[57] = bl >> 48;
+  ctx->data[56] = bl >> 56;
   sha256_transform(ctx, ctx->data);
 
   // Since this implementation uses little endian byte ordering and SHA uses big endian,
   // reverse all the bytes when copying the final state to the output hash.
+  BYTE * ptr = (BYTE*)&ctx->state;
   for (i = 0; i < 4; ++i) {
-    hash[i]      = (ctx->state[0] >> (24 - i * 8)) & 0x000000ff;
-    hash[i + 4]  = (ctx->state[1] >> (24 - i * 8)) & 0x000000ff;
-    hash[i + 8]  = (ctx->state[2] >> (24 - i * 8)) & 0x000000ff;
-    hash[i + 12] = (ctx->state[3] >> (24 - i * 8)) & 0x000000ff;
-    hash[i + 16] = (ctx->state[4] >> (24 - i * 8)) & 0x000000ff;
-    hash[i + 20] = (ctx->state[5] >> (24 - i * 8)) & 0x000000ff;
-    hash[i + 24] = (ctx->state[6] >> (24 - i * 8)) & 0x000000ff;
-    hash[i + 28] = (ctx->state[7] >> (24 - i * 8)) & 0x000000ff;
+    hash[i]      = *(ptr + 3 - i); //(ctx->state[0] >> (24 - i * 8)) & 0x000000ff;
+    hash[i + 4]  = *(ptr + 7 - i); //(ctx->state[1] >> (24 - i * 8)) & 0x000000ff;
+    hash[i + 8]  = *(ptr + 11 - i); //(ctx->state[2] >> (24 - i * 8)) & 0x000000ff;
+    hash[i + 12] = *(ptr + 15 - i); //(ctx->state[3] >> (24 - i * 8)) & 0x000000ff;
+    hash[i + 16] = *(ptr + 19 - i); //(ctx->state[4] >> (24 - i * 8)) & 0x000000ff;
+    hash[i + 20] = *(ptr + 23 - i); //(ctx->state[5] >> (24 - i * 8)) & 0x000000ff;
+    hash[i + 24] = *(ptr + 27 - i); //(ctx->state[6] >> (24 - i * 8)) & 0x000000ff;
+    hash[i + 28] = *(ptr + 31 - i); //(ctx->state[7] >> (24 - i * 8)) & 0x000000ff;
   }
 }

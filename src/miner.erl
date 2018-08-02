@@ -1,40 +1,52 @@
 -module(miner)
 .
--export([start/0, unpack_mining_data/1, speed_test/0]).
+-export([start/0]).
 %-define(Peer, "http://localhost:3011/").%for a full node on same computer.
--define(Peer, "http://localhost:8081/").%for a full node on same computer.
+%-define(Peer, "http://localhost:8081/").%for a full node on same computer.
 %-define(Peer, "http://amoveopool2.com/work").%for a mining pool on the server.
 %-define(Peer, "http://localhost:8085/").%for a mining pool on the same computer.
-%-define(Peer, "http://159.89.106.253:8085/").%for a mining pool on the server.
--define(CORES, 2).
--define(Pubkey, <<"BAAfm5pn6ILYdMCt0zF5pE2E82jsBV4ZJPbwkgM3DBS2I+/hiJc5yCnb9rrlfpWasDOB/oCYfRJ63CBG1GbAUqI=">>).
--define(period, 40000).%how long to wait in seconds before checking if new mining data is available.
--define(pool_sleep_period, 1000).%How long to wait in miliseconds if we cannot connect to the mining pool.
--define(miner_sleep, 0). %This is how you reduce the load on CPU. It sleeps this long in miliseconds between mining cycles.
-%%-define(HTTPC, httpc_mock).
--define(HTTPC, httpc).
+-define(Peer, "http://159.65.120.84:8085").%for a mining pool on the server.
+-define(CORES, 1).
+-define(Pubkey, <<"BGv90RwK8L4OBSbl+6SUuyWSQVdkVDIOJY0i1wpWZINMTIBAM9/z3bOejY/LXm2AtA/Ibx4C7eeTJ+q0vhU9xlA=">>).
+
+-ifdef(MACOS).
+  -define(Period, 7).%how long to wait in seconds before checking if new mining data is available.
+  -define(TracePeriod, 1).%how long to wait in seconds while checking for changing mining data.
+  -define(Pool_sleep_period, 1).%How long to wait in miliseconds if we cannot connect to the mining pool.
+  -define(Miner_sleep, 10). %This is how you reduce the load on CPU. It sleeps this long in miliseconds between mining cycles.
+  -define(HTTPC, httpc_mock).
+-else.
+  -define(Period, 55).%how long to wait in seconds before checking if new mining data is available.
+  -define(TracePeriod, 2).%how long to wait in seconds while checking for changing mining data.
+  -define(Pool_sleep_period, 1000).%How long to wait in miliseconds if we cannot connect to the mining pool.
+  -define(Miner_sleep, 1000). %This is how you reduce the load on CPU. It sleeps this long in miliseconds between mining cycles.
+  -define(HTTPC, httpc).
+-endif.
+
 -define(PORT_NAME, amoveo_c_miner).
--define(USE_SHARE_POOL, false).
+-define(USE_SHARE_POOL, true).
 
 start() ->
-  io:format("~p Started mining.~n", [datetime_string()]),
+  io:format("~n~s Started mining.~n~n", [datetime_string()]),
   os:cmd("pkill " ++ atom_to_list(?PORT_NAME)),
-  start2().
+  timer:sleep(?Miner_sleep),
+  Ports = start_many(?CORES),
+  start_c_miners(Ports).
 
-start2() ->
+ask_for_work() ->
   Data = case ?USE_SHARE_POOL of
     true -> <<"[\"mining_data\",\"", ?Pubkey/binary, "\"]">>;
     false -> <<"[\"mining_data\"]">>
 	end,
   R = talk_helper(Data, ?Peer, 1000),
-  io:format("R = ~128p~n", [R]),
   if is_list(R) ->
-       start_c_miners(R);
+       unpack_mining_data(R);
      true ->
+       io:format("Server wrong response : ~128p~n", [R]),
 	     timer:sleep(1000),
-	     start()
+	     ask_for_work()
   end.
-
+  
 flush() ->
   receive
     _ -> flush()
@@ -43,82 +55,128 @@ flush() ->
 
 unpack_mining_data(R) ->
   [<<"ok">>, [_, Hash, BlockDiff, ShareDiff]] = mochijson2:decode(R),
+  F = base64:decode(Hash),
   case ?USE_SHARE_POOL of
 	  true ->
-      F = base64:decode(Hash),
       {F, BlockDiff, ShareDiff};
 		false ->
-      F = base64:decode(Hash),
       {F, ShareDiff, ShareDiff}
 	end.
 
-start_c_miners(R) ->
-  {F, BD, SD} = unpack_mining_data(R), %S is the nonce
-  RS = crypto:strong_rand_bytes(32),
+start_c_miners(Ports) ->
+  {F, BD, SD} = ask_for_work(),
+  run_miners(Ports, F, BD, SD, ?TracePeriod),
+%%  [Port ! {self(), close} || {_, Port} <- Ports],
+  start().
+
+run_miners(Ports, F, BD, SD, Period) ->
+  RS = crypto:strong_rand_bytes(23),
   flush(),
-  Ports = start_many(?CORES),
-	[Port ! {self(), {command, <<F/binary, RS/binary, BD:32/integer, SD:32/integer, Core_id:32/integer>>}} || {Core_id, Port} <- Ports],
+  [Port ! {self(), {command, <<"I", F/binary, RS/binary, BD:32/integer, SD:32/integer, Core_id:32/integer>>}} || {Core_id, Port} <- Ports],
+%  io:format("~s Sent command 'I'~n", [datetime_string()]),
+  run_miners(Ports, F, Period).
+
+run_miners(Ports, Bhash, Period) ->
   receive
-		{_Port, {data, Nonce}} ->
-      io:format("Data from port: ~p", [Nonce]),
-      case Nonce of 
-        0 -> io:fwrite("nonce 0 error\n");
-        _ ->
-		      BinNonce = base64:encode(Nonce),
-		      Data = <<"[\"work\",\"", BinNonce/binary, "\",\"", ?Pubkey/binary, "\"]">>,
-          RR = talk_helper(Data, ?Peer, 5),
-          LL = try mochijson2:decode(RR) of
-            [_ | L] -> L;
-			      L -> L
-		      catch E:Reason ->
-            io:format(" ---- Unexpected response from server: ~128p~nError: ~p : ~p~n", [RR, E, Reason]),
-            RR
-          end,
-          io:format("~p Found a block. Nonce ~128p. Response from server: ~128p~n~n", [datetime_string(), BinNonce, LL]),
-		      timer:sleep(200)
-	    end;
-    Err -> 
-      io:format("Err from port: ~p", [Err])
-  after (?period * 1000) ->
-    io:fwrite("did not find a block in that period \n")
-  end,
-	[Port ! {self(), close} || {_, Port} <- Ports],
-  timer:sleep(?miner_sleep),
-  start2().
+  after (Period * 1000) ->
+    io:format("~s Timeout, ask for work. ~n", [datetime_string()]),
+    {F, BD, SD} = ask_for_work(),
+    flush(),
+    [Port ! {self(), {command, <<"U">>}} || {_Core_id, Port} <- Ports],
+%    io:format("~s Sent command 'U'~n", [datetime_string()]),
+    receive
+      {_Port, {data, <<"U">>}} ->
+        ok;
+      {_Port, {data, <<Success:8, Nonce:23/binary, Hash:32/binary>>}} ->
+%      io:format("Success:~p, Nonce:~128p~n", [Success, Nonce]),
+        if Success == 1 ->
+             io:format("U) Success:~p, Nonce:~128p~n Hash:~128p~n", [Success, Nonce, Hash]),
+             BinNonce = base64:encode(Nonce),
+             Data = <<"[\"work\",\"", BinNonce/binary, "\",\"", ?Pubkey/binary, "\"]">>,
+             io:format("Data to server: ~128p~n", [Data]),
+             RR = talk_helper(Data, ?Peer, 2),
+             LL = 
+             try mochijson2:decode(RR) of
+               [_ | L] -> L;
+               L -> L
+             catch E:Reason ->
+               io:format(" ---- Unexpected response from server: ~128p~nError: ~p : ~p~n", [RR, E, Reason]),
+               RR
+             end,
+             io:format("~s Found a block. Nonce ~128p. Response from server: ~128p~n~n", [datetime_string(), BinNonce, LL]);
+           true ->
+             ok %%io:format("~s Did not find a block in that period~n", [datetime_string()])
+        end;
+      Err -> 
+        io:format("U) Err from port: ~p", [Err]),
+        start()
+    after 10000 ->
+        io:format("~s U) PORT timeout error: ~n", [datetime_string()]),
+        start()
+    end,
+    if F =:= Bhash ->
+		     run_miners(Ports, F, ?TracePeriod);
+		   true ->
+         flush(),
+         [Port ! {self(), {command, <<"S">>}} || {_Core_id, Port} <- Ports],
+%         io:format("~s Sent command 'S'~n", [datetime_string()]),
+         receive
+           {_, {data, <<"S">>}} ->
+             ok;
+           {_, {data, <<Success1:8, Nonce1:23/binary, Hash1:32/binary>>}} ->
+%           io:format("Success:~p, Nonce:~128p~n", [Success1, Nonce1]),
+             if Success1 == 1 ->
+                  io:format("S) Success:~p, Nonce:~128p~n Hash:~128p~n", [Success1, Nonce1, Hash1]),
+                  BinNonce1 = base64:encode(Nonce1),
+                  Data1 = <<"[\"work\",\"", BinNonce1/binary, "\",\"", ?Pubkey/binary, "\"]">>,
+                  io:format("Data to server: ~128p~n", [Data1]),
+                  RR1 = talk_helper(Data1, ?Peer, 2),
+                  LL1 = 
+                  try mochijson2:decode(RR1) of
+                    [_ | L1] -> L1;
+                    L1 -> L1
+                  catch E1:Reason1 ->
+                    io:format(" ---- Unexpected response from server: ~128p~nError: ~p : ~p~n", [RR1, E1, Reason1]),
+                    RR1
+                  end,
+                  io:format("~s Found a block. Nonce ~128p. Response from server: ~128p~n~n", [datetime_string(), BinNonce1, LL1]);
+                true ->
+                  ok %%io:format("~s Did not find a block in that period~n", [datetime_string()])
+             end;
+           Err1 -> 
+             io:format("S) Err from port: ~p", [Err1])
+         after 30000 ->
+           io:format("~s S) PORT timeout error: ~n", [datetime_string()])
+         end,
+         run_miners(Ports, F, BD, SD, ?Period)
+	  end
+  end.
 
 start_many(N) when N < 1 -> [];
 start_many(N) -> 
-  Opts = [{packet, 4}, binary, exit_status, use_stdio],
+  Opts = [{packet, 4}, binary, exit_status, use_stdio, {args, [integer_to_list(N - 1)]}],
   Port = erlang:open_port({spawn_executable, ?PORT_NAME}, Opts),
-  [{N, Port} | start_many(N - 1)].
+  [{N - 1, Port} | start_many(N - 1)].
 
 talk_helper2(Data, Peer) ->
   ?HTTPC:request(post, {Peer, [], "application/octet-stream", iolist_to_binary(Data)}, [{timeout, 3000}], []).
 
-talk_helper(_Data, _Peer, 0) -> throw("talk helper failed");
+talk_helper(_Data, _Peer, 0) -> []; %%throw("talk helper failed");
 talk_helper(Data, Peer, N) ->
   case talk_helper2(Data, Peer) of
     {ok, {_Status, _Headers, []}} ->
-      io:fwrite("server gave confusing response\n"),
-      timer:sleep(?pool_sleep_period),
+      io:fwrite("server ~p gave confusing response: ~p; ~p.\n", [Peer, _Status, _Headers]),
+      timer:sleep(?Pool_sleep_period),
       talk_helper(Data, Peer, N-1);
     {ok, {_, _, R}} ->
-      io:format("server responce: ~256p~n", [R]),
+      io:format("~s Server responce: ~256p~n", [datetime_string(), R]),
       R;
     _E -> 
       io:fwrite("\nIf you are running a solo-mining node, then this error may have happened because you need to turn on and sync your Amoveo node before you can mine. You can get it here: https://github.com/zack-bitcoin/amoveo \n If this error happens while connected to the public mining node, then it can probably be safely ignored."),
-      timer:sleep(?pool_sleep_period),
+      timer:sleep(?Pool_sleep_period),
       talk_helper(Data, Peer, N-1)
   end.
 
 datetime_string() ->
   {{_Year, Month, Day}, {Hour, Minute, Second}} = calendar:local_time(),
   lists:concat([Month, "/", Day, "-", Hour, ":", Minute, ":", Second]).
-
-speed_test() -> 
-  io:format("~p Speed test started.~n", [datetime_string()]),
-  BD = 10,
-  SD = 10,
-  F = <<0:256>>,
-  RS = <<0:256>>,
-  file:write_file("mining_input", <<F/binary, RS/binary, BD:32/integer, SD:32/integer>>).
