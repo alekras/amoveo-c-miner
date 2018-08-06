@@ -73,7 +73,7 @@ run_miners(Ports, F, BD, SD, Period) ->
   RS = crypto:strong_rand_bytes(23),
   flush(),
   [Port ! {self(), {command, <<"I", F/binary, RS/binary, BD:32/integer, SD:32/integer, Core_id:32/integer>>}} || {Core_id, Port} <- Ports],
-%  io:format("~s Sent command 'I'~n", [datetime_string()]),
+  io:format("~s Sent command 'I'~n", [datetime_string()]),
   run_miners(Ports, F, Period).
 
 run_miners(Ports, Bhash, Period) ->
@@ -83,14 +83,14 @@ run_miners(Ports, Bhash, Period) ->
     {F, BD, SD} = ask_for_work(),
     flush(),
     [Port ! {self(), {command, <<"U">>}} || {_Core_id, Port} <- Ports],
-%    io:format("~s Sent command 'U'~n", [datetime_string()]),
+    io:format("~s Sent command 'U'~n", [datetime_string()]),
     receive
       {_Port, {data, <<"U">>}} ->
         ok;
       {_Port, {data, <<Success:8, Nonce:23/binary, Hash:32/binary>>}} ->
 %      io:format("Success:~p, Nonce:~128p~n", [Success, Nonce]),
         if Success == 1 ->
-             io:format("U) Success:~p, Nonce:~128p~n Hash:~128p~n", [Success, Nonce, Hash]),
+             io:format("Success:~p, Nonce:~128p~n Hash:~128p~n", [Success, Nonce, Hash]),
              BinNonce = base64:encode(Nonce),
              Data = <<"[\"work\",\"", BinNonce/binary, "\",\"", ?Pubkey/binary, "\"]">>,
              io:format("Data to server: ~128p~n", [Data]),
@@ -108,10 +108,10 @@ run_miners(Ports, Bhash, Period) ->
              ok %%io:format("~s Did not find a block in that period~n", [datetime_string()])
         end;
       Err -> 
-        io:format("U) Err from port: ~p", [Err]),
+        io:format(" Err from port: ~p", [Err]),
         start()
     after 10000 ->
-        io:format("~s U) PORT timeout error: ~n", [datetime_string()]),
+        io:format("~s PORT timeout error: ~n", [datetime_string()]),
         start()
     end,
     if F =:= Bhash ->
@@ -119,36 +119,15 @@ run_miners(Ports, Bhash, Period) ->
 		   true ->
          flush(),
          [Port ! {self(), {command, <<"S">>}} || {_Core_id, Port} <- Ports],
-%         io:format("~s Sent command 'S'~n", [datetime_string()]),
+         io:format("~s Sent command 'S'~n", [datetime_string()]),
          receive
-           {_, {data, <<"S">>}} ->
+           {_Port, {data, <<"S">>}} ->
              ok;
-           {_, {data, <<Success1:8, Nonce1:23/binary, Hash1:32/binary>>}} ->
-%           io:format("Success:~p, Nonce:~128p~n", [Success1, Nonce1]),
-             if Success1 == 1 ->
-                  io:format("S) Success:~p, Nonce:~128p~n Hash:~128p~n", [Success1, Nonce1, Hash1]),
-                  BinNonce1 = base64:encode(Nonce1),
-                  Data1 = <<"[\"work\",\"", BinNonce1/binary, "\",\"", ?Pubkey/binary, "\"]">>,
-                  io:format("Data to server: ~128p~n", [Data1]),
-                  RR1 = talk_helper(Data1, ?Peer, 2),
-                  LL1 = 
-                  try mochijson2:decode(RR1) of
-                    [_ | L1] -> L1;
-                    L1 -> L1
-                  catch E1:Reason1 ->
-                    io:format(" ---- Unexpected response from server: ~128p~nError: ~p : ~p~n", [RR1, E1, Reason1]),
-                    RR1
-                  end,
-                  io:format("~s Found a block. Nonce ~128p. Response from server: ~128p~n~n", [datetime_string(), BinNonce1, LL1]);
-                true ->
-                  ok %%io:format("~s Did not find a block in that period~n", [datetime_string()])
-             end;
-           Err1 -> 
-             io:format("S) Err from port: ~p", [Err1])
-         after 30000 ->
-           io:format("~s S) PORT timeout error: ~n", [datetime_string()])
-         end,
-         run_miners(Ports, F, BD, SD, ?Period)
+           Err -> 
+             io:format(" Err from port: ~p", [Err])
+         after 10000 ->
+           io:format("~s PORT timeout error: ~n", [datetime_string()])
+         end
 	  end
   end.
 

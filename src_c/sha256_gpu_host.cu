@@ -111,20 +111,20 @@ extern "C" bool amoveo_stop_gpu(BYTE *nonce, BYTE *data) {
 
 extern "C" void amoveo_hash_gpu(BYTE *data, WORD len, BYTE *hash, WORD cycle) {
   BYTE *h_data;
-  cudaDeviceProp prop;
-  CUDA_SAFE_CALL( cudaGetDeviceProperties (&prop, 0) );
-  fprintf(stderr," MultiProcessor Count = %d\n", prop.multiProcessorCount);
-  fprintf(stderr," Maximum number of threads per block = %d\n", prop.maxThreadsPerBlock);
-  fprintf(stderr," maxThreadsDim[3] contains the maximum size of each dimension of a block = [%d,%d,%d]\n", prop.maxThreadsDim[0],prop.maxThreadsDim[1],prop.maxThreadsDim[2]);
-  fprintf(stderr," maxGridSize[3] contains the maximum size of each dimension of a grid = [%d,%d,%d]\n", prop.maxGridSize[0],prop.maxGridSize[1],prop.maxGridSize[2]);
-  fprintf(stderr," canMapHostMemory is 1 if the device can map host memory into the CUDA address space for use with cudaHostAlloc()/cudaHostGetDevicePointer(), or 0 if not = %d\n", prop.canMapHostMemory);
-
-  fprintf(stderr," asyncEngineCount is 1 when the device can concurrently copy memory between host and device while executing a kernel.\n");
-  fprintf(stderr,"   It is 2 when the device can concurrently copy memory between host and device in both directions and execute a kernel at the same time.\n");
-  fprintf(stderr,"   It is 0 if neither of these is supported = %d\n", prop.asyncEngineCount);
-  fprintf(stderr," unifiedAddressing is 1 if the device shares a unified address space with the host and 0 otherwise = %d\n", prop.unifiedAddressing);
-  fprintf(stderr," maxThreadsPerMultiProcessor is the number of maximum resident threads per multiprocessor = %d\n", prop.maxThreadsPerMultiProcessor);
-  fflush(stderr);
+//  cudaDeviceProp prop;
+//  CUDA_SAFE_CALL( cudaGetDeviceProperties (&prop, 0) );
+//  fprintf(stderr," MultiProcessor Count = %d\n", prop.multiProcessorCount);
+//  fprintf(stderr," Maximum number of threads per block = %d\n", prop.maxThreadsPerBlock);
+//  fprintf(stderr," maxThreadsDim[3] contains the maximum size of each dimension of a block = [%d,%d,%d]\n", prop.maxThreadsDim[0],prop.maxThreadsDim[1],prop.maxThreadsDim[2]);
+//  fprintf(stderr," maxGridSize[3] contains the maximum size of each dimension of a grid = [%d,%d,%d]\n", prop.maxGridSize[0],prop.maxGridSize[1],prop.maxGridSize[2]);
+//  fprintf(stderr," canMapHostMemory is 1 if the device can map host memory into the CUDA address space for use with cudaHostAlloc()/cudaHostGetDevicePointer(), or 0 if not = %d\n", prop.canMapHostMemory);
+//
+//  fprintf(stderr," asyncEngineCount is 1 when the device can concurrently copy memory between host and device while executing a kernel.\n");
+//  fprintf(stderr,"   It is 2 when the device can concurrently copy memory between host and device in both directions and execute a kernel at the same time.\n");
+//  fprintf(stderr,"   It is 0 if neither of these is supported = %d\n", prop.asyncEngineCount);
+//  fprintf(stderr," unifiedAddressing is 1 if the device shares a unified address space with the host and 0 otherwise = %d\n", prop.unifiedAddressing);
+//  fprintf(stderr," maxThreadsPerMultiProcessor is the number of maximum resident threads per multiprocessor = %d\n", prop.maxThreadsPerMultiProcessor);
+//  fflush(stderr);
 
   CUDA_SAFE_CALL( cudaHostAlloc((void **)&h_data, len * sizeof(BYTE), cudaHostAllocMapped) );
   CUDA_SAFE_CALL( cudaHostGetDevicePointer(&d_data, h_data, 0) );
@@ -134,7 +134,7 @@ extern "C" void amoveo_hash_gpu(BYTE *data, WORD len, BYTE *hash, WORD cycle) {
   CUDA_SAFE_CALL( cudaHostAlloc((void **)&h_hash, 32 * sizeof(BYTE), cudaHostAllocMapped) );
   CUDA_SAFE_CALL( cudaHostGetDevicePointer(&d_hash, h_hash, 0) );
 
-  kernel_sha256_val<<<1, 1>>>(d_data, len, d_hash, cycle, d_stop);
+  kernel_sha256_val<<<1, 1>>>(d_data, len, d_hash, cycle);
 
   cudaDeviceSynchronize();
 
@@ -172,8 +172,8 @@ extern "C" void amoveo_gpu_alloc_mem() {
 
 extern "C" void amoveo_gpu_free_mem() {
 //Free memory on device
-  CUDA_SAFE_CALL( cudaFreeHost(d_data) );
-  CUDA_SAFE_CALL( cudaFreeHost(d_nonce) );
+  CUDA_SAFE_CALL( cudaFreeHost(h_data) );
+  CUDA_SAFE_CALL( cudaFreeHost(h_nonce) );
   CUDA_SAFE_CALL( cudaFreeHost(h_success) );
   CUDA_SAFE_CALL( cudaFreeHost(h_stop) );
   CUDA_SAFE_CALL( cudaFreeHost(h_cycles) );
@@ -215,4 +215,89 @@ extern "C" void amoveo_mine_gpu(BYTE nonce[23],
   gettimeofday(&t_start, NULL);
   kernel_sha256<<<DimGrid, DimBlock>>>(d_data, difficulty, d_nonce, d_success, d_stop, d_cycles, device_id, d_info_debug);
 //  fprintf(stderr,"GPU: <<< Amoveo mine gpu\r\n");
+}
+
+WORD hash_2_int(BYTE h[32]) {
+  WORD our_diff = 0;
+
+  for(int i = 0; i < 31; i++) {
+    BYTE mask = 0x80;
+    for(int j = 0; j < 8; j++) {
+      if ( (h[i] & mask) == 0 ) {
+        our_diff++;
+        mask = mask >> 1;
+      } else {
+        our_diff *= 256;
+        our_diff += ((h[i] << j) + (h[i + 1] >> (8 - j)));
+        return our_diff;
+      }
+    }
+  }
+  return our_diff;
+}
+
+extern "C" void test1(unsigned int difficulty, BYTE data[32]) {
+  amoveo_gpu_alloc_mem();
+
+  *h_success = false;
+  *h_stop = false;
+
+  memcpy(h_data, data, 32 * sizeof(BYTE));
+  memset(h_nonce, 0, 23);
+
+  int gdim = 9,
+      bdim = 1024;
+  gettimeofday(&t_start, NULL);
+  kernel_sha256<<<gdim, bdim>>>(d_data, difficulty, d_nonce, d_success, d_stop, d_cycles, 0, d_info_debug);
+
+  int n = 0;
+  while(n < 24) {
+    sleep(10);
+    fprintf(stderr,"  n=%d, success=%d, stop=%d, cycles=%d.\r\n", n, *h_success, *h_stop, *h_cycles);
+    if (*h_success) {
+      break;
+    }
+    n++;
+  }
+  *h_stop = true;
+  cudaDeviceSynchronize();
+
+  fprintf(stderr,"* n=%d, success=%d, stop=%d, cycles=%d.\r\n", n, *h_success, *h_stop, *h_cycles);
+  gettimeofday(&t_end, NULL);
+  double numHashes = ((double)gdim)*((double)bdim)*((double)(*h_cycles));
+  double total_elapsed = (double)(t_end.tv_usec - t_start.tv_usec) / 1000000 + (double)(t_end.tv_sec - t_start.tv_sec);
+
+  fprintf(stderr,"Cycles = %d  Hash rate = %0.2f MH/s  took time = %0.1f secs\r\n", *h_cycles, numHashes/(1000000.0*total_elapsed), total_elapsed);
+    fprintf(stderr,"Nonce   : ");
+    for(int i = 0; i < 23; i++)
+        fprintf(stderr,"%02X.",h_nonce[i]);
+    fprintf(stderr,"\n");
+    fprintf(stderr,"Data    : ");
+    for(int i = 0; i < 32; i++)
+        fprintf(stderr,"%02X.",h_data[i]);
+    fprintf(stderr,"\n");
+  //  for (int i = 0; i < 2048; i++) {
+  //    fprintf(stderr, "[fl:%d, blk.idx:[%d, %d], thr.idx:[%d, %d]]\n", h_info_debug[i].flag, h_info_debug[i].blockIdx, h_info_debug[i].blockIdy, h_info_debug[i].threadIdx, h_info_debug[i].threadIdy);
+  //  }
+
+  BYTE text[55];//32+23
+  BYTE result[32];
+  for (int i = 0; i < 32; i++) {
+    text[i] = data[i];
+  }
+  for (int i = 0; i < 23; i++) {
+    text[i + 32] = h_nonce[i];
+  }
+
+  amoveo_hash_gpu(text, 55, result, 1);
+
+  fprintf(stderr,"Result  : ");
+  for(int i = 0; i < 32; i++)
+      fprintf(stderr,"%02X.",result[i]);
+  fprintf(stderr,"\n");
+  fprintf(stderr,"Difficulty: %d.", hash_2_int(result));
+  fprintf(stderr,"\n");
+  fflush(stderr);
+
+  amoveo_gpu_free_mem();
 }
