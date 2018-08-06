@@ -11,7 +11,7 @@
 
 extern "C" {
   char amoveo_update_gpu(BYTE *nonce, BYTE *data);
-  char amoveo_stop_gpu(BYTE *nonce, BYTE *data);
+  void amoveo_stop_gpu();
   void amoveo_hash_gpu(BYTE *data, WORD len, BYTE *hash, WORD cycle);
   void amoveo_gpu_alloc_mem();
   void amoveo_gpu_free_mem();
@@ -127,7 +127,7 @@ int main(int argc, char **argv) {
           std::cout.flush();
         }
       } else if (command == 'S') {
-        success = amoveo_stop_gpu(nonce, bhash);
+        amoveo_stop_gpu();
 //        std::cerr << "PORT: after command= " << command << ".\n\r";
 //        std::cerr.flush();
         gettimeofday(&t_end, NULL);
@@ -136,17 +136,9 @@ int main(int argc, char **argv) {
 
 //        fprintf(fdebug,"PORT:: took time = %0.1f secs\r\n", total_elapsed);
 
-        if (success) {
-          write_32b_integer(std::cout, 24 + 32);
-          std::cout.write(reinterpret_cast<char*>(&success), 1);
-          std::cout.write((char*)nonce, 23);
-          std::cout.write((char*)bhash, 32);
-          std::cout.flush();
-        } else {
-          write_32b_integer(std::cout, 1);
-          std::cout.write(reinterpret_cast<char*>(&command), 1);
-          std::cout.flush();
-        }
+        write_32b_integer(std::cout, 1);
+        std::cout.write(reinterpret_cast<char*>(&command), 1);
+        std::cout.flush();
       }
     }
     amoveo_gpu_free_mem();
