@@ -134,6 +134,12 @@ __global__ void kernel_sha256_val(BYTE *data, WORD len, BYTE *hash, WORD cycle) 
     hash[i + 24] = *(ptr + 27 - i); //(ctx->state[6] >> (24 - i * 8)) & 0x000000ff;
     hash[i + 28] = *(ptr + 31 - i); //(ctx->state[7] >> (24 - i * 8)) & 0x000000ff;
   }
+  for (int i = 0; i < 32; i += 4) {
+	hash[i]     = *(ptr + 3 + i);  
+	hash[i + 1] = *(ptr + 2 + i);  
+	hash[i + 2] = *(ptr + 1 + i);  
+	hash[i + 3] = *(ptr + i);  
+  }
 }
 
 __device__ WORD hash2int(BYTE h[32]) {
