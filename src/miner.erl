@@ -56,6 +56,7 @@ flush() ->
 unpack_mining_data(R) ->
   [<<"ok">>, [_, Hash, BlockDiff, ShareDiff]] = mochijson2:decode(R),
   F = base64:decode(Hash),
+  io:format("~s Server responce: Hash:~256p Diff:~p~n", [datetime_string(), F, BlockDiff]),
   case ?USE_SHARE_POOL of
 	  true ->
       {F, BlockDiff, ShareDiff};
@@ -108,10 +109,10 @@ run_miners(Ports, Bhash, Period) ->
              ok %%io:format("~s Did not find a block in that period~n", [datetime_string()])
         end;
       Err -> 
-        io:format(" Err from port: ~p", [Err]),
+        io:format("U) Err from port: ~p", [Err]),
         start()
     after 10000 ->
-        io:format("~s PORT timeout error: ~n", [datetime_string()]),
+        io:format("~s U) PORT timeout error: ~n", [datetime_string()]),
         start()
     end,
     if F =:= Bhash ->
@@ -121,12 +122,12 @@ run_miners(Ports, Bhash, Period) ->
          [Port ! {self(), {command, <<"S">>}} || {_Core_id, Port} <- Ports],
          io:format("~s Sent command 'S'~n", [datetime_string()]),
          receive
-           {_Port, {data, <<"S">>}} ->
-             ok;
-           Err -> 
-             io:format(" Err from port: ~p", [Err])
+           {_, {data, <<"S">>}} ->
+             run_miners(Ports, F, BD, SD, ?Period);
+           Err1 -> 
+             io:format("S) Err from port: ~p", [Err1])
          after 10000 ->
-           io:format("~s PORT timeout error: ~n", [datetime_string()])
+           io:format("~s S) PORT timeout error: ~n", [datetime_string()])
          end
 	  end
   end.
@@ -148,7 +149,7 @@ talk_helper(Data, Peer, N) ->
       timer:sleep(?Pool_sleep_period),
       talk_helper(Data, Peer, N-1);
     {ok, {_, _, R}} ->
-      io:format("~s Server responce: ~256p~n", [datetime_string(), R]),
+%%      io:format("~s Server responce: ~256p~n", [datetime_string(), R]),
       R;
     _E -> 
       io:fwrite("\nIf you are running a solo-mining node, then this error may have happened because you need to turn on and sync your Amoveo node before you can mine. You can get it here: https://github.com/zack-bitcoin/amoveo \n If this error happens while connected to the public mining node, then it can probably be safely ignored."),

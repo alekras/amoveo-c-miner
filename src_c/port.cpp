@@ -65,8 +65,8 @@ std::ostream&  write_32b_integer(std::ostream& s, uint32_t len) {
 
 int main(int argc, char **argv) {
   char debugfilename[16];
-  WORD GDIM = 64, BDIM = 512;
-  struct timeval t_start, t_end;
+  WORD GDIM = 36, BDIM = 1024;
+//  struct timeval t_start, t_end;
   sprintf(debugfilename,"debug%s.txt",argv[1]); //id);
   fdebug = fopen(debugfilename,"w");
 
@@ -106,8 +106,8 @@ int main(int argc, char **argv) {
         share_diff = read_32b_integer(std::cin);
 // read core_id, 4 bytes
         id = read_32b_integer(std::cin);
-        gettimeofday(&t_start, NULL);
-//        block_diff = block_diff >> 1;
+//        gettimeofday(&t_start, NULL);
+//        block_diff = 8000;
         amoveo_mine_gpu(nonce, block_diff, bhash, GDIM, BDIM, id);
 //        std::cerr << "PORT: after command= " << command << ".\n\r";
 //        std::cerr.flush();
@@ -130,9 +130,9 @@ int main(int argc, char **argv) {
         amoveo_stop_gpu();
 //        std::cerr << "PORT: after command= " << command << ".\n\r";
 //        std::cerr.flush();
-        gettimeofday(&t_end, NULL);
+//        gettimeofday(&t_end, NULL);
 //       double numHashes = ((double)GDIM)*((double)GDIM)*((double)BDIM)*((double)(*h_cycles));
-        double total_elapsed = (double)(t_end.tv_usec - t_start.tv_usec) / 1000000 + (double)(t_end.tv_sec - t_start.tv_sec);
+//        double total_elapsed = (double)(t_end.tv_usec - t_start.tv_usec) / 1000000 + (double)(t_end.tv_sec - t_start.tv_sec);
 
 //        fprintf(fdebug,"PORT:: took time = %0.1f secs\r\n", total_elapsed);
 
