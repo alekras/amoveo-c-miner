@@ -82,22 +82,19 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
 //      }
 //      break;
     }
-//    if( work > (difficulty >> 1) ) {
-//      BYTE * ptr = (BYTE*)&ctx.state;
-//      for (i = 0; i < 4; ++i) {
-//        data[i]      = *(ptr + 3 - i); //(ctx->state[0] >> (24 - i * 8)) & 0x000000ff;
-//        data[i + 4]  = *(ptr + 7 - i); //(ctx->state[1] >> (24 - i * 8)) & 0x000000ff;
-//        data[i + 8]  = *(ptr + 11 - i); //(ctx->state[2] >> (24 - i * 8)) & 0x000000ff;
-//        data[i + 12] = *(ptr + 15 - i); //(ctx->state[3] >> (24 - i * 8)) & 0x000000ff;
-//        data[i + 16] = *(ptr + 19 - i); //(ctx->state[4] >> (24 - i * 8)) & 0x000000ff;
-//        data[i + 20] = *(ptr + 23 - i); //(ctx->state[5] >> (24 - i * 8)) & 0x000000ff;
-//        data[i + 24] = *(ptr + 27 - i); //(ctx->state[6] >> (24 - i * 8)) & 0x000000ff;
-//        data[i + 28] = *(ptr + 31 - i); //(ctx->state[7] >> (24 - i * 8)) & 0x000000ff;
-//      }
-//      for (i = 0; i < 32; i++) {
-//        data[i] = hash[i];
-//      }
-//    }
+    if( work > 9000 ) {
+      BYTE * ptr = (BYTE*)&ctx.state;
+      for (i = 0; i < 4; ++i) {
+        data[i]      = *(ptr + 3 - i); //(ctx->state[0] >> (24 - i * 8)) & 0x000000ff;
+        data[i + 4]  = *(ptr + 7 - i); //(ctx->state[1] >> (24 - i * 8)) & 0x000000ff;
+        data[i + 8]  = *(ptr + 11 - i); //(ctx->state[2] >> (24 - i * 8)) & 0x000000ff;
+        data[i + 12] = *(ptr + 15 - i); //(ctx->state[3] >> (24 - i * 8)) & 0x000000ff;
+        data[i + 16] = *(ptr + 19 - i); //(ctx->state[4] >> (24 - i * 8)) & 0x000000ff;
+        data[i + 20] = *(ptr + 23 - i); //(ctx->state[5] >> (24 - i * 8)) & 0x000000ff;
+        data[i + 24] = *(ptr + 27 - i); //(ctx->state[6] >> (24 - i * 8)) & 0x000000ff;
+        data[i + 28] = *(ptr + 31 - i); //(ctx->state[7] >> (24 - i * 8)) & 0x000000ff;
+      }
+    }
   }
 //  int offset = jdx * sizeRow + idx;
 //  if (offset < 2048) {

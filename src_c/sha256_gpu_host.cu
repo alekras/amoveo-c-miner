@@ -25,6 +25,8 @@ extern "C" {
  maxThreadsPerMultiProcessor is the number of maximum resident threads per multiprocessor = 2048
 
  */
+WORD hash_2_int(BYTE h[32]);
+extern "C" void amoveo_hash_gpu(BYTE *data, WORD len, BYTE *hash, WORD cycle);
 
 inline void gpuAssert(cudaError_t code, char *file, int line, bool abort) {
   if (code != cudaSuccess) {
@@ -39,7 +41,9 @@ inline void gpuAssert(cudaError_t code, char *file, int line, bool abort) {
 static GPU_thread_info *h_info_debug;
 static GPU_thread_info *d_info_debug;
 static struct timeval t_start, t_end;
-static int GDIM, BDIM;
+
+static BYTE text[55];//32+23
+static unsigned int GDIM, BDIM;
 
 //Allocate space on Global Memory
 static BYTE *h_data, *d_data;
@@ -52,36 +56,46 @@ static long int *h_cycles, *d_cycles;
 extern "C" bool amoveo_update_gpu(BYTE *nonce, BYTE *data) {
   fprintf(stderr,"GPU: >>> Amoveo update *h_stop=%d *h_success=%d\r\n", *h_stop, *h_success);
 
-  if (*h_stop) {
-  } else {
-    *h_stop = true;
-    cudaDeviceSynchronize();
-  }
-  fprintf(stderr,"GPU: --- Amoveo update *h_stop=%d *h_success=%d\r\n", *h_stop, *h_success);
-
-  bool success_ret = *h_success;
-  if (success_ret) {
+  if (*h_success) {
     fprintf(stderr,"GPU: !!!!!!!!!! Amoveo update h_success=%d\r\n", *h_success);
     fprintf(fdebug,"GPU: !!!!!!!!!! Amoveo update h_success=%d\r\n", *h_success);
+
+    BYTE result[32];
+    for (int i = 0; i < 23; i++) {
+      text[i + 32] = h_nonce[i];
+    }
+
+    amoveo_hash_gpu(text, 55, result, 1);
+
+    fprintf(stderr,"Result  : ");
+    for(int i = 0; i < 32; i++)
+        fprintf(stderr,"%02X.",h_data[i]);
+    fprintf(stderr,"\r\n");
+    fprintf(stderr,"Check   : ");
+    for(int i = 0; i < 32; i++)
+        fprintf(stderr,"%02X.",result[i]);
+    fprintf(stderr,"\r\n");
+    fprintf(stderr,"Difficulty: %d.", hash_2_int(result));
+    fprintf(stderr,"\r\n");
+    fflush(stderr);
+
     memcpy(nonce, h_nonce, 23 * sizeof(BYTE));
     memcpy(data, h_data, 32 * sizeof(BYTE));
-    *h_success = false;
   }
 
   fprintf(stderr,"GPU: <<< Amoveo update *h_stop=%d *h_success=%d\r\n", *h_stop, *h_success);
-  return success_ret;
+  return *h_success;
 }
 
-extern "C" bool amoveo_stop_gpu(BYTE *nonce, BYTE *data) {
+extern "C" void amoveo_stop_gpu() {
   fprintf(stderr,"GPU: >>> Amoveo stop *h_stop=%d *h_success=%d\r\n", *h_stop, *h_success);
-//  *h_stop = true;
+  *h_stop = true;
 
-//  cudaDeviceSynchronize();
+  cudaDeviceSynchronize();
 
   gettimeofday(&t_end, NULL);
-  double numHashes = ((double)GDIM)*((double)GDIM)*((double)BDIM)*((double)(*h_cycles));
+  double numHashes = ((double)GDIM)*((double)BDIM)*((double)(*h_cycles));
   double total_elapsed = (double)(t_end.tv_usec - t_start.tv_usec) / 1000000 + (double)(t_end.tv_sec - t_start.tv_sec);
-//  double total_elapsed = ((double)(t_end-t_start))/CLOCKS_PER_SEC;
 
   fprintf(fdebug,"Cycles = %d  Hash rate = %0.2f MH/s  took time = %0.1f secs\r\n", *h_cycles, numHashes/(1000000.0*total_elapsed), total_elapsed);
   fprintf(fdebug,"Nonce   : ");
@@ -105,8 +119,6 @@ extern "C" bool amoveo_stop_gpu(BYTE *nonce, BYTE *data) {
 //  }
 
   fprintf(stderr,"GPU: <<< Amoveo stop h_stop=%d success=%d\r\n", *h_stop, *h_success);
-//  return *h_success;
-  return false;
 }
 
 extern "C" void amoveo_hash_gpu(BYTE *data, WORD len, BYTE *hash, WORD cycle) {
@@ -189,13 +201,14 @@ extern "C" void amoveo_mine_gpu(BYTE nonce[23],
   GDIM = gdim;
   BDIM = bdim;
 //Initialize Cuda Grid variables
-  dim3 DimGrid(gdim, gdim);
-  dim3 DimBlock(bdim,1);
+//  dim3 DimGrid(gdim, gdim);
+//  dim3 DimBlock(bdim,1);
 //  fprintf(stderr,"GPU: >>> Amoveo mine gpu(diff = %d)\r\n", difficulty);
 
 //Copy data to device
   memcpy(h_data, data, 32 * sizeof(BYTE));
   memcpy(h_nonce, nonce, 23 * sizeof(BYTE));
+  memcpy(text, data, 32 * sizeof(BYTE));
 //  fprintf(fdebug,"{Nonce} : ");
 //  for(int i = 0; i < 23; i++)
 //      fprintf(fdebug,"%02X.",nonce[i]);
@@ -213,7 +226,7 @@ extern "C" void amoveo_mine_gpu(BYTE nonce[23],
   *h_stop = false;
 
   gettimeofday(&t_start, NULL);
-  kernel_sha256<<<DimGrid, DimBlock>>>(d_data, difficulty, d_nonce, d_success, d_stop, d_cycles, device_id, d_info_debug);
+  kernel_sha256<<<gdim, bdim>>>(d_data, difficulty, d_nonce, d_success, d_stop, d_cycles, device_id, d_info_debug);
 //  fprintf(stderr,"GPU: <<< Amoveo mine gpu\r\n");
 }
 
