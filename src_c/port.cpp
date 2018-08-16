@@ -65,7 +65,7 @@ std::ostream&  write_32b_integer(std::ostream& s, uint32_t len) {
 
 int main(int argc, char **argv) {
   char debugfilename[16];
-  WORD GDIM = 36, BDIM = 1024;
+  WORD GDIM = 18, BDIM = 1024;
 //  struct timeval t_start, t_end;
   sprintf(debugfilename,"debug%s.txt",argv[1]); //id);
   fdebug = fopen(debugfilename,"w");
@@ -78,8 +78,7 @@ int main(int argc, char **argv) {
 // Helps to detect std::cin closing
   std::cin.exceptions ( std::istream::failbit | std::istream::badbit );
 
-  fprintf(fdebug,"--Start Erlang Port-- argc = %d argv[0] = %s argv[1] = %s ID = %d\n",
-      argc, argv[0], argv[1], id);
+  fprintf(fdebug,"--Start Erlang Port-- ID = %d\n", id);
   fflush(fdebug);
 
   try {

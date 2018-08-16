@@ -43,7 +43,7 @@ static GPU_thread_info *d_info_debug;
 static struct timeval t_start, t_end;
 
 static BYTE text[55];//32+23
-static unsigned int GDIM, BDIM;
+static unsigned int GDIM, BDIM, saved_difficulty;
 
 //Allocate space on Global Memory
 static BYTE *h_data, *d_data;
@@ -54,11 +54,15 @@ static bool *h_stop, *d_stop;
 static long int *h_cycles, *d_cycles;
 
 extern "C" bool amoveo_update_gpu(BYTE *nonce, BYTE *data) {
-  fprintf(stderr,"GPU: >>> Amoveo update *h_stop=%d *h_success=%d\r\n", *h_stop, *h_success);
-
-  if (*h_success) {
+//  fprintf(stderr,"GPU: >>> Amoveo update *h_stop=%d *h_success=%d\r\n", *h_stop, *h_success);
+  bool success_ret = *h_success;
+  if (success_ret) {
     fprintf(stderr,"GPU: !!!!!!!!!! Amoveo update h_success=%d\r\n", *h_success);
     fprintf(fdebug,"GPU: !!!!!!!!!! Amoveo update h_success=%d\r\n", *h_success);
+
+    *h_stop = true;
+
+    cudaDeviceSynchronize();
 
     BYTE result[32];
     for (int i = 0; i < 23; i++) {
@@ -67,28 +71,41 @@ extern "C" bool amoveo_update_gpu(BYTE *nonce, BYTE *data) {
 
     amoveo_hash_gpu(text, 55, result, 1);
 
-    fprintf(stderr,"Result  : ");
+    fprintf(stderr," Input     : ");
     for(int i = 0; i < 32; i++)
-        fprintf(stderr,"%02X.",h_data[i]);
+        fprintf(stderr,"%d,",text[i]);
     fprintf(stderr,"\r\n");
-    fprintf(stderr,"Check   : ");
+    fprintf(stderr," GPU Data  : ");
     for(int i = 0; i < 32; i++)
-        fprintf(stderr,"%02X.",result[i]);
+        fprintf(stderr,"%d,",h_data[i]);
     fprintf(stderr,"\r\n");
+    fprintf(stderr," Check     : ");
+    for(int i = 0; i < 32; i++)
+        fprintf(stderr,"%d,",result[i]);
+    fprintf(stderr,"\r\n");
+    fprintf(stderr," Nonce     : ");
+    for(int i = 0; i < 23; i++)
+        fprintf(stderr,"%d,",h_nonce[i]);
+    fprintf(stderr,"\r\n");
+    int d = hash_2_int(result);
     fprintf(stderr,"Difficulty: %d.", hash_2_int(result));
     fprintf(stderr,"\r\n");
     fflush(stderr);
 
     memcpy(nonce, h_nonce, 23 * sizeof(BYTE));
     memcpy(data, h_data, 32 * sizeof(BYTE));
+    if (d < saved_difficulty) {
+      success_ret = false;
+    }
+    *h_success = false;
   }
 
-  fprintf(stderr,"GPU: <<< Amoveo update *h_stop=%d *h_success=%d\r\n", *h_stop, *h_success);
-  return *h_success;
+//  fprintf(stderr,"GPU: <<< Amoveo update *h_stop=%d *h_success=%d\r\n", *h_stop, *h_success);
+  return success_ret;
 }
 
 extern "C" void amoveo_stop_gpu() {
-  fprintf(stderr,"GPU: >>> Amoveo stop *h_stop=%d *h_success=%d\r\n", *h_stop, *h_success);
+//  fprintf(stderr,"GPU: >>> Amoveo stop *h_stop=%d *h_success=%d\r\n", *h_stop, *h_success);
   *h_stop = true;
 
   cudaDeviceSynchronize();
@@ -118,7 +135,7 @@ extern "C" void amoveo_stop_gpu() {
 //    memcpy(data, h_data, 32 * sizeof(BYTE));
 //  }
 
-  fprintf(stderr,"GPU: <<< Amoveo stop h_stop=%d success=%d\r\n", *h_stop, *h_success);
+//  fprintf(stderr,"GPU: <<< Amoveo stop h_stop=%d success=%d\r\n", *h_stop, *h_success);
 }
 
 extern "C" void amoveo_hash_gpu(BYTE *data, WORD len, BYTE *hash, WORD cycle) {
@@ -175,8 +192,8 @@ extern "C" void amoveo_gpu_alloc_mem() {
   CUDA_SAFE_CALL( cudaHostAlloc((void **)&h_cycles, sizeof(long int), cudaHostAllocMapped) );
   CUDA_SAFE_CALL( cudaHostGetDevicePointer(&d_cycles, h_cycles, 0) );
 
-//  CUDA_SAFE_CALL( cudaHostAlloc((void **)&h_info_debug, 2048 * sizeof(GPU_thread_info), cudaHostAllocMapped) );
-  CUDA_SAFE_CALL( cudaHostAlloc((void **)&h_info_debug, 4 * sizeof(GPU_thread_info), cudaHostAllocMapped) );
+  CUDA_SAFE_CALL( cudaHostAlloc((void **)&h_info_debug, 2048 * sizeof(GPU_thread_info), cudaHostAllocMapped) );
+//  CUDA_SAFE_CALL( cudaHostAlloc((void **)&h_info_debug, 4 * sizeof(GPU_thread_info), cudaHostAllocMapped) );
   CUDA_SAFE_CALL( cudaHostGetDevicePointer(&d_info_debug, h_info_debug, 0) );
   *h_stop = true;
   *h_success = false;
@@ -200,6 +217,7 @@ extern "C" void amoveo_mine_gpu(BYTE nonce[23],
                                 WORD device_id) {
   GDIM = gdim;
   BDIM = bdim;
+  saved_difficulty = difficulty;
 //Initialize Cuda Grid variables
 //  dim3 DimGrid(gdim, gdim);
 //  dim3 DimBlock(bdim,1);
@@ -249,7 +267,7 @@ WORD hash_2_int(BYTE h[32]) {
   return our_diff;
 }
 
-extern "C" void test1(unsigned int difficulty, BYTE data[32]) {
+extern "C" void test1(int difficulty, int gdim, int bdim, BYTE data[32]) {
   amoveo_gpu_alloc_mem();
 
   *h_success = false;
@@ -258,8 +276,8 @@ extern "C" void test1(unsigned int difficulty, BYTE data[32]) {
   memcpy(h_data, data, 32 * sizeof(BYTE));
   memset(h_nonce, 0, 23);
 
-  int gdim = 9,
-      bdim = 1024;
+//  int gdim = 9,
+//      bdim = 1024;
   gettimeofday(&t_start, NULL);
   kernel_sha256<<<gdim, bdim>>>(d_data, difficulty, d_nonce, d_success, d_stop, d_cycles, 0, d_info_debug);
 
@@ -311,6 +329,35 @@ extern "C" void test1(unsigned int difficulty, BYTE data[32]) {
   fprintf(stderr,"Difficulty: %d.", hash_2_int(result));
   fprintf(stderr,"\n");
   fflush(stderr);
+
+  amoveo_gpu_free_mem();
+}
+
+extern "C" void test2(int gdim, int bdim) {
+  amoveo_gpu_alloc_mem();
+
+  *h_stop = false;
+
+  kernel_test<<<gdim, bdim>>>(d_stop, d_cycles, d_info_debug);
+
+  int n = 0;
+  while(n < 10) {
+    sleep(1);
+    fprintf(stderr, "  n=%d, cycles=%d.\r\n", n, *h_cycles);
+    n++;
+  }
+  *h_stop = true;
+  cudaDeviceSynchronize();
+
+  fprintf(stderr, "  n=%d, cycles=%d.\r\n", n, *h_cycles);
+  n = 0;
+  for (int i = 0; i < 100; i++) {
+	for (int j = 0; j < 10; j++) {
+	    fprintf(stderr, "[%d,%d]:%d ", h_info_debug[n].blockIdx, h_info_debug[n].threadIdx, h_info_debug[n].flag);
+	    n++;
+	}
+    fprintf(stderr, "\r\n");
+  }
 
   amoveo_gpu_free_mem();
 }
