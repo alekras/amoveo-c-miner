@@ -9,13 +9,14 @@
 #define SRC_C_SHA256_GPU_H_
 
 typedef struct {
-  BYTE flag;
+  long int flag;
   WORD blockIdx;
   WORD blockIdy;
   WORD threadIdx;
   WORD threadIdy;
 } GPU_thread_info;
 
+__global__ void kernel_test(volatile bool *stop, volatile long int *cycles, GPU_thread_info * info_debug);
 __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile bool *success, volatile bool *stop, volatile long int *cycles, WORD device_id, GPU_thread_info * info_debug);
 __global__ void kernel_sha256_val(BYTE *data, WORD len, BYTE *hash, WORD cycle);
 __device__ WORD hash2int(BYTE h[32]);

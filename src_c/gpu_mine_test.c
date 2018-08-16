@@ -3,6 +3,7 @@
 
 /*************************** HEADER FILES ***************************/
 #include <stdio.h>
+#include <stdlib.h>
 #include <memory.h>
 #include <string.h>
 #include "sha256.h"
@@ -10,7 +11,8 @@
 FILE *fdebug;
 
 /*********************** FUNCTION DEFINITIONS ***********************/
-void test1(unsigned int difficulty, BYTE data[32]);
+void test1(int difficulty, int gdim, int bdim, BYTE data[32]);
+void test2(int gdim, int bdim);
 
 void reverse_order(BYTE * h, int len) {
   BYTE a, b;
@@ -39,11 +41,28 @@ BYTE hash3[SHA256_BLOCK_SIZE] = {0x00,0x00,0x00,0x00,0x00,0x1f,0xf0,0x92,0x81,0x
 WORD words[8];
 WORD dfc;
 
-int main() {
+int main(int argc, char **argv) {
   char debugfilename[16];
   sprintf(debugfilename,"debug_test.txt");
   fdebug = fopen(debugfilename,"w");
 
-  test1(8000, hash1);
-  return(0);
+  int diff, gdim, bdim;
+  if (argc == 1) {
+	printf("Usage: %s <difficulty> <gdim> <bdim>\n", argv[0]);
+	return 0;
+  }
+  if (argc > 1) {
+	diff = (int) strtol(argv[1], (char **)0, 10);
+  }
+  if (argc > 2) {
+	gdim = (int) strtol(argv[2], (char **)0, 10);
+  }
+  if (argc > 3) {
+	bdim = (int) strtol(argv[3], (char **)0, 10);
+  }
+
+//  test1(diff, gdim, bdim, hash1);
+  test2(gdim, bdim);
+
+  return 0;
 }

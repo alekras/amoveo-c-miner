@@ -12,13 +12,38 @@ extern "C" {
 }
 #include "sha256_gpu.h"
 
+__global__ void kernel_test(volatile bool *stop, volatile long int *cycles, GPU_thread_info * info_debug) {
+  int i, k;
+  long int r;
+  WORD idx = blockIdx.x * blockDim.x + threadIdx.x;
+  WORD sizeRow = gridDim.x * blockDim.x;
+
+  r = 0;
+  while (!(*stop)) {
+    for (i = 0; i < 1000000; i++) {
+      k = k * 2;
+    }
+    r++;
+    if (idx == (sizeRow -1)) {
+      *cycles = r;
+    }
+  }
+  if (idx >= (sizeRow - 1000)) {
+    info_debug[idx - sizeRow + 1000].blockIdx = blockIdx.x;
+    info_debug[idx - sizeRow + 1000].blockIdy = blockIdx.y;
+    info_debug[idx - sizeRow + 1000].threadIdx = threadIdx.x;
+    info_debug[idx - sizeRow + 1000].threadIdy = threadIdx.y;
+    info_debug[idx - sizeRow + 1000].flag = r;
+  }
+}
+
 __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile bool *success, volatile bool *stop, volatile long int *cycles, WORD device_id, GPU_thread_info * info_debug) {
   int i, j, k, work;
   long int r;
   WORD idx = blockIdx.x * blockDim.x + threadIdx.x;
   WORD jdx = blockIdx.y * blockDim.y + threadIdx.y;
-  WORD sizeRow = gridDim.x * blockDim.x;
-  WORD sizeCol = gridDim.y * blockDim.y;
+//  WORD sizeRow = gridDim.x * blockDim.x;
+//  WORD sizeCol = gridDim.y * blockDim.y;
 
   BYTE text[55];//32+23
   SHA256_CTX ctx;
@@ -56,9 +81,9 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
     d_sha256_update(&ctx,text,55);
     d_sha256_final(&ctx,hash);
     r++;
-    if ((idx == 0) && (jdx == 0)) {
-      *cycles = r;
-    }
+//    if ((idx == 0) && (jdx == 0)) {
+//      *cycles = r;
+//    }
 
     work = hash2int_w(ctx.state);
     if( work > difficulty) {
@@ -67,15 +92,21 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
         nonce[i] = text[i + 32];
       }
       BYTE * ptr = (BYTE*)ctx.state;
-      for (i = 0; i < 4; ++i) {
-        data[i]      = *(ptr + 3 - i); //(ctx->state[0] >> (24 - i * 8)) & 0x000000ff;
-        data[i + 4]  = *(ptr + 7 - i); //(ctx->state[1] >> (24 - i * 8)) & 0x000000ff;
-        data[i + 8]  = *(ptr + 11 - i); //(ctx->state[2] >> (24 - i * 8)) & 0x000000ff;
-        data[i + 12] = *(ptr + 15 - i); //(ctx->state[3] >> (24 - i * 8)) & 0x000000ff;
-        data[i + 16] = *(ptr + 19 - i); //(ctx->state[4] >> (24 - i * 8)) & 0x000000ff;
-        data[i + 20] = *(ptr + 23 - i); //(ctx->state[5] >> (24 - i * 8)) & 0x000000ff;
-        data[i + 24] = *(ptr + 27 - i); //(ctx->state[6] >> (24 - i * 8)) & 0x000000ff;
-        data[i + 28] = *(ptr + 31 - i); //(ctx->state[7] >> (24 - i * 8)) & 0x000000ff;
+//      for (i = 0; i < 4; ++i) {
+//        data[i]      = *(ptr + 3 - i); //(ctx->state[0] >> (24 - i * 8)) & 0x000000ff;
+//        data[i + 4]  = *(ptr + 7 - i); //(ctx->state[1] >> (24 - i * 8)) & 0x000000ff;
+//        data[i + 8]  = *(ptr + 11 - i); //(ctx->state[2] >> (24 - i * 8)) & 0x000000ff;
+//        data[i + 12] = *(ptr + 15 - i); //(ctx->state[3] >> (24 - i * 8)) & 0x000000ff;
+//        data[i + 16] = *(ptr + 19 - i); //(ctx->state[4] >> (24 - i * 8)) & 0x000000ff;
+//        data[i + 20] = *(ptr + 23 - i); //(ctx->state[5] >> (24 - i * 8)) & 0x000000ff;
+//        data[i + 24] = *(ptr + 27 - i); //(ctx->state[6] >> (24 - i * 8)) & 0x000000ff;
+//        data[i + 28] = *(ptr + 31 - i); //(ctx->state[7] >> (24 - i * 8)) & 0x000000ff;
+//      }
+      for (int i = 0; i < 32; i += 4) {
+        data[i]     = *(ptr + 3 + i);
+        data[i + 1] = *(ptr + 2 + i);
+        data[i + 2] = *(ptr + 1 + i);
+        data[i + 3] = *(ptr + i);
       }
 //      for (i = 0; i < 32; i++) {
 //        data[i] = hash[i];
@@ -84,15 +115,21 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
     }
     if( work > 9000 ) {
       BYTE * ptr = (BYTE*)&ctx.state;
-      for (i = 0; i < 4; ++i) {
-        data[i]      = *(ptr + 3 - i); //(ctx->state[0] >> (24 - i * 8)) & 0x000000ff;
-        data[i + 4]  = *(ptr + 7 - i); //(ctx->state[1] >> (24 - i * 8)) & 0x000000ff;
-        data[i + 8]  = *(ptr + 11 - i); //(ctx->state[2] >> (24 - i * 8)) & 0x000000ff;
-        data[i + 12] = *(ptr + 15 - i); //(ctx->state[3] >> (24 - i * 8)) & 0x000000ff;
-        data[i + 16] = *(ptr + 19 - i); //(ctx->state[4] >> (24 - i * 8)) & 0x000000ff;
-        data[i + 20] = *(ptr + 23 - i); //(ctx->state[5] >> (24 - i * 8)) & 0x000000ff;
-        data[i + 24] = *(ptr + 27 - i); //(ctx->state[6] >> (24 - i * 8)) & 0x000000ff;
-        data[i + 28] = *(ptr + 31 - i); //(ctx->state[7] >> (24 - i * 8)) & 0x000000ff;
+//      for (i = 0; i < 4; ++i) {
+//        data[i]      = *(ptr + 3 - i); //(ctx->state[0] >> (24 - i * 8)) & 0x000000ff;
+//        data[i + 4]  = *(ptr + 7 - i); //(ctx->state[1] >> (24 - i * 8)) & 0x000000ff;
+//        data[i + 8]  = *(ptr + 11 - i); //(ctx->state[2] >> (24 - i * 8)) & 0x000000ff;
+//        data[i + 12] = *(ptr + 15 - i); //(ctx->state[3] >> (24 - i * 8)) & 0x000000ff;
+//        data[i + 16] = *(ptr + 19 - i); //(ctx->state[4] >> (24 - i * 8)) & 0x000000ff;
+//        data[i + 20] = *(ptr + 23 - i); //(ctx->state[5] >> (24 - i * 8)) & 0x000000ff;
+//        data[i + 24] = *(ptr + 27 - i); //(ctx->state[6] >> (24 - i * 8)) & 0x000000ff;
+//        data[i + 28] = *(ptr + 31 - i); //(ctx->state[7] >> (24 - i * 8)) & 0x000000ff;
+//      }
+      for (int i = 0; i < 32; i += 4) {
+        data[i]     = *(ptr + 3 + i);
+        data[i + 1] = *(ptr + 2 + i);
+        data[i + 2] = *(ptr + 1 + i);
+        data[i + 3] = *(ptr + i);
       }
     }
   }
@@ -104,7 +141,7 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
 //    info_debug[offset].threadIdx = threadIdx.x;
 //    info_debug[offset].threadIdy = threadIdx.y;
 //  }
-  if ((idx == 0) && (jdx == 0)) {
+  if ((idx == 100) && (jdx == 0)) {
     *cycles = r;
   }
 }
@@ -121,15 +158,21 @@ __global__ void kernel_sha256_val(BYTE *data, WORD len, BYTE *hash, WORD cycle) 
   d_sha256_final(&ctx,hash);
 
   BYTE * ptr = (BYTE*)ctx.state;
-  for (int i = 0; i < 4; ++i) {
-    hash[i]      = *(ptr + 3 - i); //(ctx->state[0] >> (24 - i * 8)) & 0x000000ff;
-    hash[i + 4]  = *(ptr + 7 - i); //(ctx->state[1] >> (24 - i * 8)) & 0x000000ff;
-    hash[i + 8]  = *(ptr + 11 - i); //(ctx->state[2] >> (24 - i * 8)) & 0x000000ff;
-    hash[i + 12] = *(ptr + 15 - i); //(ctx->state[3] >> (24 - i * 8)) & 0x000000ff;
-    hash[i + 16] = *(ptr + 19 - i); //(ctx->state[4] >> (24 - i * 8)) & 0x000000ff;
-    hash[i + 20] = *(ptr + 23 - i); //(ctx->state[5] >> (24 - i * 8)) & 0x000000ff;
-    hash[i + 24] = *(ptr + 27 - i); //(ctx->state[6] >> (24 - i * 8)) & 0x000000ff;
-    hash[i + 28] = *(ptr + 31 - i); //(ctx->state[7] >> (24 - i * 8)) & 0x000000ff;
+//  for (int i = 0; i < 4; ++i) {
+//    hash[i]      = *(ptr + 3 - i); //(ctx->state[0] >> (24 - i * 8)) & 0x000000ff;
+//    hash[i + 4]  = *(ptr + 7 - i); //(ctx->state[1] >> (24 - i * 8)) & 0x000000ff;
+//    hash[i + 8]  = *(ptr + 11 - i); //(ctx->state[2] >> (24 - i * 8)) & 0x000000ff;
+//    hash[i + 12] = *(ptr + 15 - i); //(ctx->state[3] >> (24 - i * 8)) & 0x000000ff;
+//    hash[i + 16] = *(ptr + 19 - i); //(ctx->state[4] >> (24 - i * 8)) & 0x000000ff;
+//    hash[i + 20] = *(ptr + 23 - i); //(ctx->state[5] >> (24 - i * 8)) & 0x000000ff;
+//    hash[i + 24] = *(ptr + 27 - i); //(ctx->state[6] >> (24 - i * 8)) & 0x000000ff;
+//    hash[i + 28] = *(ptr + 31 - i); //(ctx->state[7] >> (24 - i * 8)) & 0x000000ff;
+//  }
+  for (int i = 0; i < 32; i += 4) {
+	hash[i]     = *(ptr + 3 + i);
+	hash[i + 1] = *(ptr + 2 + i);
+	hash[i + 2] = *(ptr + 1 + i);
+	hash[i + 3] = *(ptr + i);
   }
 }
 
@@ -326,6 +369,7 @@ __device__ void d_sha256_update(SHA256_CTX *ctx, const BYTE data[], size_t len) 
     ctx->data[dl] = data[i];
     dl++;
     if (dl == 64) {
+      ctx->datalen = dl;
       d_sha256_transform(ctx, ctx->data);
       ctx->bitlen += 512;
       dl = 0;
@@ -339,7 +383,7 @@ __device__ void d_sha256_final(SHA256_CTX *ctx, BYTE hash[]) {
 
   // Pad whatever data is left in the buffer.
   ctx->data[i++] = 0x80;
-  if (i < 56) {
+  if (ctx->datalen < 56) {
     while (i < 56)
       ctx->data[i++] = 0x00;
   } else {
