@@ -41,13 +41,7 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
   int i, j, work;
   long int r;
   WORD idx = blockIdx.x * blockDim.x + threadIdx.x;
-//  WORD jdx = blockIdx.y * blockDim.y + threadIdx.y;
-//  WORD sizeRow = gridDim.x * blockDim.x;
-//  WORD sizeCol = gridDim.y * blockDim.y;
-
-//  BYTE text[55];//32+23
   AMO_SHA256_CTX ctx;
-//  BYTE hash[32];
 
   for (i = 0, j = 0; i < 8; ++i, j += 4)
     ctx.data[i] = (data[j] << 24) | (data[j + 1] << 16) | (data[j + 2] << 8) | (data[j + 3]);
@@ -64,51 +58,22 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
   ctx.data[13] = (nonce[20] << 24) | (nonce[21] << 16) | (nonce[22] << 8) | (0x80);
 
   unsigned long long int bl = 55 * 8;
-
-//  ctx->data[59] = bl >> 32;
-//  ctx->data[58] = bl >> 40; << 8
-//  ctx->data[57] = bl >> 48; << 16
-//  ctx->data[56] = bl >> 56; << 24
-
   ctx.data[14] = (WORD)(bl >> 32);
-
-//  ctx->data[63] = bl;
-//  ctx->data[62] = bl >> 8; << 8
-//  ctx->data[61] = bl >> 16; << 16
-//  ctx->data[60] = bl >> 24; <<24
-
   ctx.data[15] = (WORD)bl;
 
-//  for (i = 0; i < 32; i++) {
-//    text[i] = data[i];
-//  }
-
-//  k = 0;
-//  for (j = 0; i < 36; i++, k++, j += 8) { // k = 0
-//    text[i] = nonce[k] ^ ((BYTE)(idx >> j));
-//  }
-//  for (j = 0; i < 40; i++, k++, j += 8) { // k = 4
-//    text[i] = nonce[k] ^ ((BYTE)(jdx >> j));
-//  }
-//  text[i++] = nonce[k++] ^ ((BYTE)device_id);
-//
-//  for (;i < 55; i++, k++) { // i = 41, k = 9
-//    text[i] = nonce[k];
-//  }
   ctx.data[8] = ctx.data[8] ^ idx;
   ctx.data[9] = ctx.data[9] ^ device_id;
 
   r = 0;
-//  while (!(*stop)) {
   while (true) {
-    if ((r % 100) == 0) {
+    if ((idx == 0) && (r % 100) == 0) {
       if (*stop) {
+//      __threadfence();
+//      asm("trap;");
         break;
       }
     }
-//    if(*success) {
-//      break;
-//    }
+
     for (i = 10; i < 13; i++) {
       ctx.data[i] += 1;
       if (ctx.data[i] != 0) {
@@ -117,13 +82,8 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
     }
 
     sha256_init(&ctx);
-//    sha256_update(&ctx);
-//    sha256_final(&ctx);
     sha256_transform(&ctx);
     r++;
-//    if (idx == 100) {
-//      *cycles = r;
-//    }
 
     work = hash2int_w(ctx.state);
     if( work > difficulty) {
@@ -139,9 +99,7 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
       nonce[i]     = *(ptrn + 3 + i);
       nonce[i + 1] = *(ptrn + 2 + i);
       nonce[i + 2] = *(ptrn + 1 + i);
-//      for (i = 0; i < 23; i++) {
-//        nonce[i] = text[i + 32];
-//      }
+
       BYTE * ptr = (BYTE*)ctx.state;
       for (i = 0; i < 32; i += 4) {
         data[i]     = *(ptr + 3 + i);
@@ -172,7 +130,7 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
 //    info_debug[offset].threadIdx = threadIdx.x;
 //    info_debug[offset].threadIdy = threadIdx.y;
 //  }
-  if (idx == 0) {
+  if (idx == 1) {
     *cycles = r;
   }
 }
@@ -236,21 +194,7 @@ __device__ static const WORD k[64] = {
 __device__ void sha256_transform(AMO_SHA256_CTX *ctx) {
   WORD x, res0, res1;
   WORD a, b, c, d, e, f, g, h, i, t1, t2, m[64];
-//  BYTE * ptr = (BYTE*)&m,
-//    * ptr1 = ptr + 1,
-//    * ptr2 = ptr + 2,
-//    * ptr3 = ptr + 3,
-//    * data_ptr = (BYTE*)data;
-//
-//  for (i = 0, j = 0; i < 16; ++i, j += 4) {
-//    *(ptr3 + j) = *(data_ptr++);
-//    *(ptr2 + j) = *(data_ptr++);
-//    *(ptr1 + j) = *(data_ptr++);
-//    *(ptr + j) = *(data_ptr++);
-//  }
 
-//  for (i = 0, j = 0; i < 16; ++i, j += 4)
-//    m[i] = (data[j] << 24) | (data[j + 1] << 16) | (data[j + 2] << 8) | (data[j + 3]);
   for (i = 0; i < 16; ++i)
     m[i] = ctx->data[i];
   for ( ; i < 64; ++i) {
@@ -352,8 +296,6 @@ __device__ void sha256_transform(AMO_SHA256_CTX *ctx) {
 }
 
 __device__ void sha256_init(AMO_SHA256_CTX *ctx) {
-//  ctx->datalen = 0;
-//  ctx->bitlen = 0;
   ctx->state[0] = 0x6a09e667;
   ctx->state[1] = 0xbb67ae85;
   ctx->state[2] = 0x3c6ef372;
@@ -362,47 +304,4 @@ __device__ void sha256_init(AMO_SHA256_CTX *ctx) {
   ctx->state[5] = 0x9b05688c;
   ctx->state[6] = 0x1f83d9ab;
   ctx->state[7] = 0x5be0cd19;
-}
-
-__device__ void sha256_final(AMO_SHA256_CTX *ctx) {
-////  WORD i = ctx->datalen;
-//
-//  // Pad whatever data is left in the buffer.
-//  ctx->data[55] = 0x80;
-////  if (ctx->datalen < 56) {
-////    while (i < 56)
-////      ctx->data[i++] = 0x00;
-////  } else {
-////    while (i < 64)
-////      ctx->data[i++] = 0x00;
-////    d_sha256_transform(ctx, ctx->data);
-////    memset(ctx->data, 0, 56);
-////  }
-//
-//  // Append to the padding the total message's length in bits and transform.
-////  ctx->bitlen += ctx->datalen * 8;
-//  unsigned long long int bl = 55 * 8;
-//  ctx->data[63] = bl;
-//  ctx->data[62] = bl >> 8;
-//  ctx->data[61] = bl >> 16;
-//  ctx->data[60] = bl >> 24;
-//  ctx->data[59] = bl >> 32;
-//  ctx->data[58] = bl >> 40;
-//  ctx->data[57] = bl >> 48;
-//  ctx->data[56] = bl >> 56;
-  sha256_transform(ctx);
-
-  // Since this implementation uses little endian byte ordering and SHA uses big endian,
-  // reverse all the bytes when copying the final state to the output hash.
-//  BYTE * ptr = (BYTE*)&ctx->state;
-//  for (i = 0; i < 4; ++i) {
-//    hash[i]      = *(ptr + 3 - i); //(ctx->state[0] >> (24 - i * 8)) & 0x000000ff;
-//    hash[i + 4]  = *(ptr + 7 - i); //(ctx->state[1] >> (24 - i * 8)) & 0x000000ff;
-//    hash[i + 8]  = *(ptr + 11 - i); //(ctx->state[2] >> (24 - i * 8)) & 0x000000ff;
-//    hash[i + 12] = *(ptr + 15 - i); //(ctx->state[3] >> (24 - i * 8)) & 0x000000ff;
-//    hash[i + 16] = *(ptr + 19 - i); //(ctx->state[4] >> (24 - i * 8)) & 0x000000ff;
-//    hash[i + 20] = *(ptr + 23 - i); //(ctx->state[5] >> (24 - i * 8)) & 0x000000ff;
-//    hash[i + 24] = *(ptr + 27 - i); //(ctx->state[6] >> (24 - i * 8)) & 0x000000ff;
-//    hash[i + 28] = *(ptr + 31 - i); //(ctx->state[7] >> (24 - i * 8)) & 0x000000ff;
-//  }
 }
