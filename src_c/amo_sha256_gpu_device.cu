@@ -38,38 +38,44 @@ __global__ void kernel_test(volatile bool *stop, volatile long int *cycles, GPU_
 }
 
 __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile bool *success, volatile bool *stop, volatile long int *cycles, WORD device_id, GPU_thread_info * info_debug) {
-  int i, j, k, work;
+  int i, j, work;
   long int r;
   WORD idx = blockIdx.x * blockDim.x + threadIdx.x;
-  WORD jdx = blockIdx.y * blockDim.y + threadIdx.y;
+//  WORD jdx = blockIdx.y * blockDim.y + threadIdx.y;
 //  WORD sizeRow = gridDim.x * blockDim.x;
 //  WORD sizeCol = gridDim.y * blockDim.y;
 
-  BYTE text[55];//32+23
+//  BYTE text[55];//32+23
   AMO_SHA256_CTX ctx;
-  BYTE hash[32];
+//  BYTE hash[32];
 
   for (i = 0, j = 0; i < 8; ++i, j += 4)
     ctx.data[i] = (data[j] << 24) | (data[j + 1] << 16) | (data[j + 2] << 8) | (data[j + 3]);
 
   for (i = 8, j = 0; i < 13; ++i, j += 4)
     ctx.data[i] = (nonce[j] << 24) | (nonce[j + 1] << 16) | (nonce[j + 2] << 8) | (nonce[j + 3]);
+//i = 8, j = 0
+//i = 9, j = 4
+//i =10, j = 8
+//i =11, j =12
+//i =12, j =16
+//i =13, j =20
 
-  ctx.data[13] = (nonce[j] << 24) | (nonce[j + 1] << 16) | (nonce[j + 2] << 8) | (nonce[j + 3]);
+  ctx.data[13] = (nonce[20] << 24) | (nonce[21] << 16) | (nonce[22] << 8) | (0x80);
 
   unsigned long long int bl = 55 * 8;
 
-  ctx->data[59] = bl >> 32;
-  ctx->data[58] = bl >> 40; << 8
-  ctx->data[57] = bl >> 48; << 16
-  ctx->data[56] = bl >> 56; << 24
+//  ctx->data[59] = bl >> 32;
+//  ctx->data[58] = bl >> 40; << 8
+//  ctx->data[57] = bl >> 48; << 16
+//  ctx->data[56] = bl >> 56; << 24
 
   ctx.data[14] = (WORD)(bl >> 32);
 
-  ctx->data[63] = bl;
-  ctx->data[62] = bl >> 8; << 8
-  ctx->data[61] = bl >> 16; << 16
-  ctx->data[60] = bl >> 24; <<24
+//  ctx->data[63] = bl;
+//  ctx->data[62] = bl >> 8; << 8
+//  ctx->data[61] = bl >> 16; << 16
+//  ctx->data[60] = bl >> 24; <<24
 
   ctx.data[15] = (WORD)bl;
 
@@ -77,62 +83,86 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
 //    text[i] = data[i];
 //  }
 
-  k = 0;
-  for (j = 0; i < 36; i++, k++, j += 8) { // k = 0
-    text[i] = nonce[k] ^ ((BYTE)(idx >> j));
-  }
-  for (j = 0; i < 40; i++, k++, j += 8) { // k = 4
-    text[i] = nonce[k] ^ ((BYTE)(jdx >> j));
-  }
-  text[i++] = nonce[k++] ^ ((BYTE)device_id);
-
-  for (;i < 55; i++, k++) { // i = 41, k = 9
-    text[i] = nonce[k];
-  }
+//  k = 0;
+//  for (j = 0; i < 36; i++, k++, j += 8) { // k = 0
+//    text[i] = nonce[k] ^ ((BYTE)(idx >> j));
+//  }
+//  for (j = 0; i < 40; i++, k++, j += 8) { // k = 4
+//    text[i] = nonce[k] ^ ((BYTE)(jdx >> j));
+//  }
+//  text[i++] = nonce[k++] ^ ((BYTE)device_id);
+//
+//  for (;i < 55; i++, k++) { // i = 41, k = 9
+//    text[i] = nonce[k];
+//  }
+  ctx.data[8] = ctx.data[8] ^ idx;
+  ctx.data[9] = ctx.data[9] ^ device_id;
 
   r = 0;
-  while (!(*stop)) {
-    if(*success) {
-      break;
+//  while (!(*stop)) {
+  while (true) {
+    if ((r % 100) == 0) {
+      if (*stop) {
+        break;
+      }
     }
-    for (i = 41; i < 55; i++) {
-      text[i] += 1;
-      if (text[i] != 0) {
+//    if(*success) {
+//      break;
+//    }
+    for (i = 10; i < 13; i++) {
+      ctx.data[i] += 1;
+      if (ctx.data[i] != 0) {
         break;
       }
     }
 
     sha256_init(&ctx);
-    sha256_update(&ctx);
-    sha256_final(&ctx);
+//    sha256_update(&ctx);
+//    sha256_final(&ctx);
+    sha256_transform(&ctx);
     r++;
-//    if ((idx == 0) && (jdx == 0)) {
+//    if (idx == 100) {
 //      *cycles = r;
 //    }
 
     work = hash2int_w(ctx.state);
     if( work > difficulty) {
       *success = true;
-      for (i = 0; i < 23; i++) {
-        nonce[i] = text[i + 32];
+      *stop = true;
+      BYTE * ptrn = (BYTE*)(&(ctx.data[8]));
+      for (i = 0; i < 20; i += 4) {
+        nonce[i]     = *(ptrn + 3 + i);
+        nonce[i + 1] = *(ptrn + 2 + i);
+        nonce[i + 2] = *(ptrn + 1 + i);
+        nonce[i + 3] = *(ptrn + i);
       }
+      nonce[i]     = *(ptrn + 3 + i);
+      nonce[i + 1] = *(ptrn + 2 + i);
+      nonce[i + 2] = *(ptrn + 1 + i);
+//      for (i = 0; i < 23; i++) {
+//        nonce[i] = text[i + 32];
+//      }
       BYTE * ptr = (BYTE*)ctx.state;
-      for (int i = 0; i < 32; i += 4) {
+      for (i = 0; i < 32; i += 4) {
         data[i]     = *(ptr + 3 + i);
         data[i + 1] = *(ptr + 2 + i);
         data[i + 2] = *(ptr + 1 + i);
         data[i + 3] = *(ptr + i);
       }
+      *cycles = r;
+
+//      __threadfence();
+//      asm("trap;");
     }
-    if( work > 9000 ) {
-      BYTE * ptr = (BYTE*)&ctx.state;
-      for (int i = 0; i < 32; i += 4) {
-        data[i]     = *(ptr + 3 + i);
-        data[i + 1] = *(ptr + 2 + i);
-        data[i + 2] = *(ptr + 1 + i);
-        data[i + 3] = *(ptr + i);
-      }
-    }
+//    if( work > 9000 ) {
+//      BYTE * ptr = (BYTE*)&ctx.state;
+//      for (int i = 0; i < 32; i += 4) {
+//        data[i]     = *(ptr + 3 + i);
+//        data[i + 1] = *(ptr + 2 + i);
+//        data[i + 2] = *(ptr + 1 + i);
+//        data[i + 3] = *(ptr + i);
+//      }
+//    }
   }
 //  int offset = jdx * sizeRow + idx;
 //  if (offset < 2048) {
@@ -142,7 +172,7 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
 //    info_debug[offset].threadIdx = threadIdx.x;
 //    info_debug[offset].threadIdy = threadIdx.y;
 //  }
-  if ((idx == 100) && (jdx == 0)) {
+  if (idx == 0) {
     *cycles = r;
   }
 }
@@ -205,7 +235,7 @@ __device__ static const WORD k[64] = {
 //https://github.com/B-Con/crypto-algorithms/blob/master/sha256.c
 __device__ void sha256_transform(AMO_SHA256_CTX *ctx) {
   WORD x, res0, res1;
-  WORD a, b, c, d, e, f, g, h, i, j, t1, t2, m[64];
+  WORD a, b, c, d, e, f, g, h, i, t1, t2, m[64];
 //  BYTE * ptr = (BYTE*)&m,
 //    * ptr1 = ptr + 1,
 //    * ptr2 = ptr + 2,
@@ -219,8 +249,10 @@ __device__ void sha256_transform(AMO_SHA256_CTX *ctx) {
 //    *(ptr + j) = *(data_ptr++);
 //  }
 
-  for (i = 0, j = 0; i < 16; ++i, j += 4)
-    m[i] = (data[j] << 24) | (data[j + 1] << 16) | (data[j + 2] << 8) | (data[j + 3]);
+//  for (i = 0, j = 0; i < 16; ++i, j += 4)
+//    m[i] = (data[j] << 24) | (data[j + 1] << 16) | (data[j + 2] << 8) | (data[j + 3]);
+  for (i = 0; i < 16; ++i)
+    m[i] = ctx->data[i];
   for ( ; i < 64; ++i) {
 // sig0:
     x = m[i - 15];
@@ -332,50 +364,33 @@ __device__ void sha256_init(AMO_SHA256_CTX *ctx) {
   ctx->state[7] = 0x5be0cd19;
 }
 
-__device__ void sha256_update(AMO_SHA256_CTX *ctx) {
-//  WORD i;
-//  ctx->datalen = len;
-
-//  for (i = 0; i < len; ++i) {
-//    ctx->data[i] = data[i];
-//    dl++;
-//    if (dl == 64) {
-//      ctx->datalen = dl;
-//      d_sha256_transform(ctx, ctx->data);
-//      ctx->bitlen += 512;
-//      dl = 0;
-//    }
-//  }
-//  ctx->datalen = dl;
-}
-
-__device__ void sha256_final(SHA256_CTX *ctx, BYTE hash[]) {
-//  WORD i = ctx->datalen;
-
-  // Pad whatever data is left in the buffer.
-  ctx->data[55] = 0x80;
-//  if (ctx->datalen < 56) {
-//    while (i < 56)
-//      ctx->data[i++] = 0x00;
-//  } else {
-//    while (i < 64)
-//      ctx->data[i++] = 0x00;
-//    d_sha256_transform(ctx, ctx->data);
-//    memset(ctx->data, 0, 56);
-//  }
-
-  // Append to the padding the total message's length in bits and transform.
-//  ctx->bitlen += ctx->datalen * 8;
-  unsigned long long int bl = 55 * 8;
-  ctx->data[63] = bl;
-  ctx->data[62] = bl >> 8;
-  ctx->data[61] = bl >> 16;
-  ctx->data[60] = bl >> 24;
-  ctx->data[59] = bl >> 32;
-  ctx->data[58] = bl >> 40;
-  ctx->data[57] = bl >> 48;
-  ctx->data[56] = bl >> 56;
-  sha256_transform(ctx, ctx->data);
+__device__ void sha256_final(AMO_SHA256_CTX *ctx) {
+////  WORD i = ctx->datalen;
+//
+//  // Pad whatever data is left in the buffer.
+//  ctx->data[55] = 0x80;
+////  if (ctx->datalen < 56) {
+////    while (i < 56)
+////      ctx->data[i++] = 0x00;
+////  } else {
+////    while (i < 64)
+////      ctx->data[i++] = 0x00;
+////    d_sha256_transform(ctx, ctx->data);
+////    memset(ctx->data, 0, 56);
+////  }
+//
+//  // Append to the padding the total message's length in bits and transform.
+////  ctx->bitlen += ctx->datalen * 8;
+//  unsigned long long int bl = 55 * 8;
+//  ctx->data[63] = bl;
+//  ctx->data[62] = bl >> 8;
+//  ctx->data[61] = bl >> 16;
+//  ctx->data[60] = bl >> 24;
+//  ctx->data[59] = bl >> 32;
+//  ctx->data[58] = bl >> 40;
+//  ctx->data[57] = bl >> 48;
+//  ctx->data[56] = bl >> 56;
+  sha256_transform(ctx);
 
   // Since this implementation uses little endian byte ordering and SHA uses big endian,
   // reverse all the bytes when copying the final state to the output hash.

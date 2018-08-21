@@ -279,6 +279,8 @@ extern "C" void test1(int difficulty, int gdim, int bdim, BYTE data[32]) {
 //  int gdim = 9,
 //      bdim = 1024;
   gettimeofday(&t_start, NULL);
+  h_nonce[0] = (BYTE)t_start.tv_usec;
+  h_nonce[22] = (BYTE)(t_start.tv_usec >> 8);
   kernel_sha256<<<gdim, bdim>>>(d_data, difficulty, d_nonce, d_success, d_stop, d_cycles, 0, d_info_debug);
 
   int n = 0;
@@ -299,11 +301,11 @@ extern "C" void test1(int difficulty, int gdim, int bdim, BYTE data[32]) {
   double total_elapsed = (double)(t_end.tv_usec - t_start.tv_usec) / 1000000 + (double)(t_end.tv_sec - t_start.tv_sec);
 
   fprintf(stderr,"Cycles = %d  Hash rate = %0.2f MH/s  took time = %0.1f secs\r\n", *h_cycles, numHashes/(1000000.0*total_elapsed), total_elapsed);
-    fprintf(stderr,"Nonce   : ");
+    fprintf(stderr," Nonce   : ");
     for(int i = 0; i < 23; i++)
         fprintf(stderr,"%02X.",h_nonce[i]);
     fprintf(stderr,"\n");
-    fprintf(stderr,"Data    : ");
+    fprintf(stderr," Data    : ");
     for(int i = 0; i < 32; i++)
         fprintf(stderr,"%02X.",h_data[i]);
     fprintf(stderr,"\n");
@@ -322,11 +324,11 @@ extern "C" void test1(int difficulty, int gdim, int bdim, BYTE data[32]) {
 
   amoveo_hash_gpu(text, 55, result, 1);
 
-  fprintf(stderr,"Result  : ");
+  fprintf(stderr," Check   : ");
   for(int i = 0; i < 32; i++)
       fprintf(stderr,"%02X.",result[i]);
   fprintf(stderr,"\n");
-  fprintf(stderr,"Difficulty: %d.", hash_2_int(result));
+  fprintf(stderr," Difficulty: %d.", hash_2_int(result));
   fprintf(stderr,"\n");
   fflush(stderr);
 

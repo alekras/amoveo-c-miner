@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <memory.h>
 #include <string.h>
-#include "sha256.h"
+#include "../src_c/sha256.h"
 
 FILE *fdebug;
 
@@ -61,8 +61,13 @@ int main(int argc, char **argv) {
 	bdim = (int) strtol(argv[3], (char **)0, 10);
   }
 
-//  test1(diff, gdim, bdim, hash1);
-  test2(gdim, bdim);
+  test1(diff, gdim, bdim, hash1);
+//  test2(gdim, bdim);
 
   return 0;
 }
+/*
+ *If you want all other threads to abort as well, use asm("trap;"), potentially with a threadfence() or threadfence_system() before it
+ * if you want to make sure previous writes hit memory first. In the asm("trap;") case,
+ * the next CUDA call will return an error code to indicate that the kernel has been aborted.
+ * */
