@@ -37,6 +37,7 @@ inline void gpuAssert(cudaError_t code, char *file, int line, bool abort) {
 }
 
 #define CUDA_SAFE_CALL(ans) { gpuAssert((ans), (char*)__FILE__, __LINE__, true); }
+#define CUDA_UNSAFE_CALL(ans) { gpuAssert((ans), (char*)__FILE__, __LINE__, false); }
 
 static GPU_thread_info *h_info_debug;
 static GPU_thread_info *d_info_debug;
@@ -47,7 +48,7 @@ static unsigned int GDIM, BDIM, saved_difficulty;
 
 //Allocate space on Global Memory
 static BYTE *h_data, *d_data;
-static BYTE *h_hash, *d_hash;
+//static BYTE *h_hash, *d_hash;
 static BYTE *h_nonce, *d_nonce;
 static bool *h_success, *d_success;
 static bool *h_stop, *d_stop;
@@ -62,7 +63,7 @@ extern "C" bool amoveo_update_gpu(BYTE *nonce, BYTE *data) {
 
     *h_stop = true;
 
-    cudaDeviceSynchronize();
+    CUDA_SAFE_CALL( cudaDeviceSynchronize() );
 
     BYTE result[32];
     for (int i = 0; i < 23; i++) {
@@ -108,7 +109,7 @@ extern "C" void amoveo_stop_gpu() {
 //  fprintf(stderr,"GPU: >>> Amoveo stop *h_stop=%d *h_success=%d\r\n", *h_stop, *h_success);
   *h_stop = true;
 
-  cudaDeviceSynchronize();
+  CUDA_SAFE_CALL( cudaDeviceSynchronize() );
 
   gettimeofday(&t_end, NULL);
   double numHashes = ((double)GDIM)*((double)BDIM)*((double)(*h_cycles));
@@ -139,7 +140,8 @@ extern "C" void amoveo_stop_gpu() {
 }
 
 extern "C" void amoveo_hash_gpu(BYTE *data, WORD len, BYTE *hash, WORD cycle) {
-  BYTE *h_data;
+  BYTE *h_data, *d_data;
+  BYTE *h_hash, *d_hash;
 //  cudaDeviceProp prop;
 //  CUDA_SAFE_CALL( cudaGetDeviceProperties (&prop, 0) );
 //  fprintf(stderr," MultiProcessor Count = %d\n", prop.multiProcessorCount);
@@ -165,7 +167,7 @@ extern "C" void amoveo_hash_gpu(BYTE *data, WORD len, BYTE *hash, WORD cycle) {
 
   kernel_sha256_val<<<1, 1>>>(d_data, len, d_hash, cycle);
 
-  cudaDeviceSynchronize();
+  CUDA_SAFE_CALL( cudaDeviceSynchronize() );
 
 //Copy result back to host
   memcpy(hash, h_hash, 32 * sizeof(BYTE));
@@ -268,70 +270,78 @@ WORD hash_2_int(BYTE h[32]) {
 }
 
 extern "C" void test1(int difficulty, int gdim, int bdim, BYTE data[32]) {
+  int n, m;
   amoveo_gpu_alloc_mem();
 
-  *h_success = false;
-  *h_stop = false;
+  m = 0;
+  while (m < 3) {
+    *h_success = false;
+    *h_stop = false;
 
-  memcpy(h_data, data, 32 * sizeof(BYTE));
-  memset(h_nonce, 0, 23);
+    memcpy(h_data, data, 32 * sizeof(BYTE));
+    memset(h_nonce, 0, 23);
 
 //  int gdim = 9,
 //      bdim = 1024;
-  gettimeofday(&t_start, NULL);
-  h_nonce[0] = (BYTE)t_start.tv_usec;
-  h_nonce[22] = (BYTE)(t_start.tv_usec >> 8);
-  kernel_sha256<<<gdim, bdim>>>(d_data, difficulty, d_nonce, d_success, d_stop, d_cycles, 0, d_info_debug);
+    gettimeofday(&t_start, NULL);
+    h_nonce[0] = (BYTE)t_start.tv_usec;
+    h_nonce[22] = (BYTE)(t_start.tv_usec >> 8);
+    kernel_sha256<<<gdim, bdim>>>(d_data, difficulty, d_nonce, d_success, d_stop, d_cycles, 0, d_info_debug);
 
-  int n = 0;
-  while(n < 24) {
-    sleep(10);
-    fprintf(stderr,"  n=%d, success=%d, stop=%d, cycles=%d.\r\n", n, *h_success, *h_stop, *h_cycles);
-    if (*h_success) {
-      break;
+    m++;
+    n = 0;
+    while(n < 12) {
+      sleep(5);
+      fprintf(stderr,"  m=%d:n=%d, success=%d, stop=%d, cycles=%d.\r\n", m, n, *h_success, *h_stop, *h_cycles);
+      if (*h_success) {
+        break;
+      }
+      n++;
     }
-    n++;
-  }
-  *h_stop = true;
-  cudaDeviceSynchronize();
+    *h_stop = true;
+    CUDA_SAFE_CALL( cudaDeviceSynchronize() );
 
-  fprintf(stderr,"* n=%d, success=%d, stop=%d, cycles=%d.\r\n", n, *h_success, *h_stop, *h_cycles);
-  gettimeofday(&t_end, NULL);
-  double numHashes = ((double)gdim)*((double)bdim)*((double)(*h_cycles));
-  double total_elapsed = (double)(t_end.tv_usec - t_start.tv_usec) / 1000000 + (double)(t_end.tv_sec - t_start.tv_sec);
+    fprintf(stderr,"* m=%d:n=%d, success=%d, stop=%d, cycles=%d.\r\n", m, n, *h_success, *h_stop, *h_cycles);
+    gettimeofday(&t_end, NULL);
+    double numHashes = ((double)gdim)*((double)bdim)*((double)(*h_cycles));
+    double total_elapsed = (double)(t_end.tv_usec - t_start.tv_usec) / 1000000 + (double)(t_end.tv_sec - t_start.tv_sec);
 
-  fprintf(stderr,"Cycles = %d  Hash rate = %0.2f MH/s  took time = %0.1f secs\r\n", *h_cycles, numHashes/(1000000.0*total_elapsed), total_elapsed);
+    fprintf(stderr,"Cycles = %d  Hash rate = %0.2f MH/s  took time = %0.1f secs\r\n", *h_cycles, numHashes/(1000000.0*total_elapsed), total_elapsed);
     fprintf(stderr," Nonce   : ");
     for(int i = 0; i < 23; i++)
-        fprintf(stderr,"%02X.",h_nonce[i]);
+      fprintf(stderr,"%02X.",h_nonce[i]);
     fprintf(stderr,"\n");
     fprintf(stderr," Data    : ");
     for(int i = 0; i < 32; i++)
-        fprintf(stderr,"%02X.",h_data[i]);
+      fprintf(stderr,"%02X.",h_data[i]);
     fprintf(stderr,"\n");
-  //  for (int i = 0; i < 2048; i++) {
-  //    fprintf(stderr, "[fl:%d, blk.idx:[%d, %d], thr.idx:[%d, %d]]\n", h_info_debug[i].flag, h_info_debug[i].blockIdx, h_info_debug[i].blockIdy, h_info_debug[i].threadIdx, h_info_debug[i].threadIdy);
-  //  }
+    //  for (int i = 0; i < 2048; i++) {
+    //    fprintf(stderr, "[fl:%d, blk.idx:[%d, %d], thr.idx:[%d, %d]]\n", h_info_debug[i].flag, h_info_debug[i].blockIdx, h_info_debug[i].blockIdy, h_info_debug[i].threadIdx, h_info_debug[i].threadIdy);
+    //  }
 
-  BYTE text[55];//32+23
-  BYTE result[32];
-  for (int i = 0; i < 32; i++) {
-    text[i] = data[i];
-  }
-  for (int i = 0; i < 23; i++) {
-    text[i + 32] = h_nonce[i];
-  }
+    BYTE text[55];//32+23
+    BYTE result[32];
+    for (int i = 0; i < 32; i++) {
+      text[i] = data[i];
+    }
+    for (int i = 0; i < 23; i++) {
+      text[i + 32] = h_nonce[i];
+    }
 
-  amoveo_hash_gpu(text, 55, result, 1);
+//    amoveo_gpu_free_mem();
+//    CUDA_SAFE_CALL( cudaDeviceReset() );
+//    CUDA_SAFE_CALL( cudaSetDevice(0) );
+//    amoveo_gpu_alloc_mem();
+    amoveo_hash_gpu(text, 55, result, 1);
 
-  fprintf(stderr," Check   : ");
-  for(int i = 0; i < 32; i++)
+    fprintf(stderr," Check   : ");
+    for(int i = 0; i < 32; i++)
       fprintf(stderr,"%02X.",result[i]);
-  fprintf(stderr,"\n");
-  fprintf(stderr," Difficulty: %d.", hash_2_int(result));
-  fprintf(stderr,"\n");
-  fflush(stderr);
-
+    fprintf(stderr,"\n");
+    fprintf(stderr," Difficulty: %d.", hash_2_int(result));
+    fprintf(stderr,"\n");
+    fflush(stderr);
+  }
   amoveo_gpu_free_mem();
 }
 

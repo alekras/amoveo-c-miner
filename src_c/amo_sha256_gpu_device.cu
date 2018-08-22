@@ -66,10 +66,11 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
 
   r = 0;
   while (true) {
-    if ((idx == 0) && (r % 100) == 0) {
+    if ((r % 100) == 0) {
       if (*stop) {
-//      __threadfence();
-//      asm("trap;");
+//        *cycles = r;
+//        __threadfence();
+//        asm("trap;");
         break;
       }
     }
@@ -107,10 +108,11 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
         data[i + 2] = *(ptr + 1 + i);
         data[i + 3] = *(ptr + i);
       }
-      *cycles = r;
+//      *cycles = r;
 
 //      __threadfence();
 //      asm("trap;");
+//      break;
     }
 //    if( work > 9000 ) {
 //      BYTE * ptr = (BYTE*)&ctx.state;
