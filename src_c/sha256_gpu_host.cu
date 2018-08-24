@@ -39,9 +39,9 @@ inline void gpuAssert(cudaError_t code, char *file, int line, bool abort) {
 #define CUDA_SAFE_CALL(ans) { gpuAssert((ans), (char*)__FILE__, __LINE__, true); }
 #define CUDA_UNSAFE_CALL(ans) { gpuAssert((ans), (char*)__FILE__, __LINE__, false); }
 
-static GPU_thread_info *h_info_debug;
-static GPU_thread_info *d_info_debug;
+static GPU_thread_info *h_info_debug, *d_info_debug;
 static struct timeval t_start, t_end;
+static long int *h_cycles_total, *d_cycles_total;
 
 static BYTE text[55];//32+23
 static unsigned int GDIM, BDIM, saved_difficulty;
@@ -194,8 +194,10 @@ extern "C" void amoveo_gpu_alloc_mem() {
   CUDA_SAFE_CALL( cudaHostAlloc((void **)&h_cycles, sizeof(long int), cudaHostAllocMapped) );
   CUDA_SAFE_CALL( cudaHostGetDevicePointer(&d_cycles, h_cycles, 0) );
 
-  CUDA_SAFE_CALL( cudaHostAlloc((void **)&h_info_debug, 2048 * sizeof(GPU_thread_info), cudaHostAllocMapped) );
-//  CUDA_SAFE_CALL( cudaHostAlloc((void **)&h_info_debug, 4 * sizeof(GPU_thread_info), cudaHostAllocMapped) );
+  CUDA_SAFE_CALL( cudaHostAlloc((void **)&h_cycles_total, (18 * 1024) * sizeof(long int), cudaHostAllocMapped) );
+  CUDA_SAFE_CALL( cudaHostGetDevicePointer(&d_cycles_total, h_cycles_total, 0) );
+//  CUDA_SAFE_CALL( cudaHostAlloc((void **)&h_info_debug, 2048 * sizeof(GPU_thread_info), cudaHostAllocMapped) );
+  CUDA_SAFE_CALL( cudaHostAlloc((void **)&h_info_debug, 4 * sizeof(GPU_thread_info), cudaHostAllocMapped) );
   CUDA_SAFE_CALL( cudaHostGetDevicePointer(&d_info_debug, h_info_debug, 0) );
   *h_stop = true;
   *h_success = false;
@@ -246,7 +248,7 @@ extern "C" void amoveo_mine_gpu(BYTE nonce[23],
   *h_stop = false;
 
   gettimeofday(&t_start, NULL);
-  kernel_sha256<<<gdim, bdim>>>(d_data, difficulty, d_nonce, d_success, d_stop, d_cycles, device_id, d_info_debug);
+  kernel_sha256<<<gdim, bdim>>>(d_data, difficulty, d_nonce, d_success, d_stop, d_cycles, device_id, d_cycles_total);
 //  fprintf(stderr,"GPU: <<< Amoveo mine gpu\r\n");
 }
 

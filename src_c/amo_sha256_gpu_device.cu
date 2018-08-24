@@ -37,7 +37,7 @@ __global__ void kernel_test(volatile bool *stop, volatile long int *cycles, GPU_
   }
 }
 
-__global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile bool *success, volatile bool *stop, volatile long int *cycles, WORD device_id, GPU_thread_info * info_debug) {
+__global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile bool *success, volatile bool *stop, volatile long int *cycles, WORD device_id, long int * cycles_total) {
   int i, j, work;
   long int r;
   WORD idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -132,6 +132,7 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
 //    info_debug[offset].threadIdx = threadIdx.x;
 //    info_debug[offset].threadIdy = threadIdx.y;
 //  }
+  cycles_total[idx] = r;
   if (idx == 1) {
     *cycles = r;
   }
