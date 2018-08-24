@@ -51,7 +51,7 @@ static BYTE *h_data, *d_data;
 //static BYTE *h_hash, *d_hash;
 static BYTE *h_nonce, *d_nonce;
 static bool *h_success, *d_success;
-static bool *h_stop, *d_stop;
+static bool stop, *h_stop, *d_stop;
 static long int *h_cycles, *d_cycles;
 
 extern "C" bool amoveo_update_gpu(BYTE *nonce, BYTE *data) {
@@ -305,10 +305,22 @@ extern "C" void test1(int difficulty, int gdim, int bdim, BYTE data[32]) {
 
     fprintf(stderr,"* m=%d:n=%d, success=%d, stop=%d, cycles=%d.\r\n", m, n, *h_success, *h_stop, *h_cycles);
     gettimeofday(&t_end, NULL);
-    double numHashes = ((double)gdim)*((double)bdim)*((double)(*h_cycles));
+
+    long int total = 0, min_cycles = 10000000, max_cycles = 0;
+    for(int i = 0; i < (18 * 1024); i++) {
+    	long int temp = h_cycles_total[i];
+    	total = total + temp;
+    	if (temp < min_cycles) {
+    		min_cycles = temp;
+    	}
+    	if (temp > max_cycles) {
+    		max_cycles = temp;
+    	}
+    }
+    double numHashes = ((double)gdim)*((double)bdim)*((double)(total));
     double total_elapsed = (double)(t_end.tv_usec - t_start.tv_usec) / 1000000 + (double)(t_end.tv_sec - t_start.tv_sec);
 
-    fprintf(stderr,"Cycles = %d  Hash rate = %0.2f MH/s  took time = %0.1f secs\r\n", *h_cycles, numHashes/(1000000.0*total_elapsed), total_elapsed);
+    fprintf(stderr,"Cycles = %d, (max=%d, min=%d) Hash rate = %0.2f MH/s  took time = %0.1f secs\r\n", total, max_cycles, min_cycles, numHashes/(1000000.0*total_elapsed), total_elapsed);
     fprintf(stderr," Nonce   : ");
     for(int i = 0; i < 23; i++)
       fprintf(stderr,"%02X.",h_nonce[i]);

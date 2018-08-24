@@ -38,7 +38,7 @@ __global__ void kernel_test(volatile bool *stop, volatile long int *cycles, GPU_
 }
 
 __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile bool *success, volatile bool *stop, volatile long int *cycles, WORD device_id, long int * cycles_total) {
-  int i, j, work;
+  int i, j, work, index;
   long int r;
   WORD idx = blockIdx.x * blockDim.x + threadIdx.x;
   AMO_SHA256_CTX ctx;
@@ -65,8 +65,9 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
   ctx.data[9] = ctx.data[9] ^ device_id;
 
   r = 0;
+  index = idx % 100;
   while (true) {
-    if ((r % 100) == 0) {
+    if ((r % 100) == index) {
       if (*stop) {
 //        *cycles = r;
 //        __threadfence();
