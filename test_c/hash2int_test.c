@@ -65,7 +65,8 @@ WORD h2i_w(WORD h[8]) {
           our_diff += (h[i] >> (24 -j));
 //          printf(" 1) %08X  %08X  ",h[i], (h[i] >> (24 -j)) );
         } else {
-          our_diff += ((h[i] << (j - 24)) + (h[i + 1] >> (56 - j)));
+//          WORD t = ((h[i + 1] >> 1) & 0x7FFFFFFF) >> (55 - j);
+          our_diff += ((h[i] << (j - 24)) + (((h[i + 1] >> 1) & 0x7FFFFFFF) >> (55 - j)));
 //          printf(" 2) %08X  %08X  ",h[i], (h[i] >> (24 -j)) );
         }
         return our_diff;

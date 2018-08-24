@@ -172,7 +172,7 @@ __device__ WORD hash2int_w(WORD h[8]) {
         if ((24 - j) >= 0) {
           our_diff += (h[i] >> (24 -j));
         } else {
-          our_diff += ((h[i] << (j - 24)) + (h[i + 1] >> (56 - j)));
+          our_diff += ((h[i] << (j - 24)) + (((h[i + 1] >> 1) & 0x7FFFFFFF) >> (55 - j)));
         }
         return our_diff;
       }
