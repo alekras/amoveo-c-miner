@@ -1,0 +1,37 @@
+1. move k[i] to previous step
+2. increment nounce only 12, 13
+3. delete hash2int()
+4. review hash2int_w (about masking)
+
+------------------------------------------
+step (i): 60   61   62   63 
+h         h.60 g.60 f.60 e.60 
+g         g.60 f.60 e.60 e.61     
+f         f.60 e.60 e.61 e.62        
+e         e.60 e.61 e.62         
+------------------------------------------
+
+  f0 = f = ctx->state[5];
+  g0 = g = ctx->state[6];
+  h0 = h = ctx->state[7];
+
+    e = d + t1;
+    if (i == 60) {
+      if (((e + h0) != 0) {
+        return false;
+      }
+    }
+
+    if (i == 61) {
+      if (((e + g0) != 0) {
+        return false;
+      }
+    }
+
+    if (i == 62) {
+      if (((e + f0) != 0) {
+        return false;
+      }
+    }
+
+
