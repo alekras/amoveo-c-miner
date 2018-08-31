@@ -28,7 +28,7 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
 __global__ void kernel_sha256_val(BYTE *data, WORD len, BYTE *hash, WORD cycle);
 __device__ WORD hash2int(BYTE h[32]);
 __device__ WORD hash2int_w(WORD h[8]);
-__device__ void sha256_transform(AMO_SHA256_CTX *ctx);
+__device__ bool sha256_transform(AMO_SHA256_CTX *ctx);
 __device__ void sha256_init(AMO_SHA256_CTX *ctx);
 //__device__ void sha256_update(AMO_SHA256_CTX *ctx, const BYTE data[], size_t len);
 //__device__ void sha256_final(AMO_SHA256_CTX *ctx, BYTE hash[]);

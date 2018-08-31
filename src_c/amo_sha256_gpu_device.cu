@@ -38,34 +38,29 @@ __global__ void kernel_test(volatile bool *stop, volatile long int *cycles, GPU_
 }
 
 __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile bool *success, volatile bool *stop, volatile long int *cycles, WORD device_id, long int * cycles_total) {
-  int i, j, work, index;
+  int i, j, work;
   long int r;
-  WORD idx = blockIdx.x * blockDim.x + threadIdx.x;
+  long int idx = blockIdx.x * blockDim.x + threadIdx.x;
   AMO_SHA256_CTX ctx;
 
-  for (i = 0, j = 0; i < 8; ++i, j += 4)
+  for (i = 0, j = 0; i < 8; ++i, j += 4) {
     ctx.data[i] = (data[j] << 24) | (data[j + 1] << 16) | (data[j + 2] << 8) | (data[j + 3]);
+  }
 
-  for (i = 8, j = 0; i < 13; ++i, j += 4)
+  for (i = 8, j = 0; i < 13; ++i, j += 4) {
     ctx.data[i] = (nonce[j] << 24) | (nonce[j + 1] << 16) | (nonce[j + 2] << 8) | (nonce[j + 3]);
-//i = 8, j = 0
-//i = 9, j = 4
-//i =10, j = 8
-//i =11, j =12
-//i =12, j =16
-//i =13, j =20
-
+  }
   ctx.data[13] = (nonce[20] << 24) | (nonce[21] << 16) | (nonce[22] << 8) | (0x80);
 
   unsigned long long int bl = 55 * 8;
   ctx.data[14] = (WORD)(bl >> 32);
   ctx.data[15] = (WORD)bl;
 
-  ctx.data[8] = ctx.data[8] ^ idx;
-  ctx.data[9] = ctx.data[9] ^ device_id;
+  ctx.data[9] = ctx.data[9] ^ idx;
+  ctx.data[10] = ctx.data[10] ^ device_id;
 
   r = 0;
-  index = idx % 100;
+  int index = 99; //(int)(idx % 100);
   while (true) {
     if ((r % 100) == index) {
       if (*stop) {
@@ -76,17 +71,20 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
       }
     }
 
-    for (i = 10; i < 13; i++) {
-      ctx.data[i] += 1;
+    for (i = 11; i < 13; i++) { // do not touch [13]
+      ctx.data[i]++;
       if (ctx.data[i] != 0) {
         break;
       }
     }
 
+    r++;
     sha256_init(&ctx);
     sha256_transform(&ctx);
-    r++;
-
+//    if (!sha256_transform(&ctx)) {
+//      continue;
+//    }
+//
     work = hash2int_w(ctx.state);
     if( work > difficulty) {
       *success = true;
@@ -139,25 +137,6 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
   }
 }
 
-__device__ WORD hash2int(BYTE h[32]) {
-  WORD our_diff = 0;
-
-  for(int i = 0; i < 31; i++) {
-    BYTE mask = 0x80;
-    for(int j = 0; j < 8; j++) {
-      if ( (h[i] & mask) == 0 ) {
-        our_diff++;
-        mask = mask >> 1;
-      } else {
-        our_diff *= 256;
-        our_diff += ((h[i] << j) + (h[i + 1] >> (8 - j)));
-        return our_diff;
-      }
-    }
-  }
-  return our_diff;
-}
-
 __device__ WORD hash2int_w(WORD h[8]) {
   WORD our_diff = 0;
 
@@ -169,8 +148,14 @@ __device__ WORD hash2int_w(WORD h[8]) {
         mask = mask >> 1;
       } else {
         our_diff *= 256;
+        if (j == 31) {
+          j = 0;
+          i++;
+        } else {
+          j++;
+        }
         if ((24 - j) >= 0) {
-          our_diff += (h[i] >> (24 -j));
+          our_diff += (h[i] >> (24 -j)) & 0xff;
         } else {
           our_diff += ((h[i] << (j - 24)) + (((h[i + 1] >> 1) & 0x7FFFFFFF) >> (55 - j)));
         }
@@ -195,9 +180,10 @@ __device__ static const WORD k[64] = {
 
 //SHA-256 functions taken from Brad Conte's implementation
 //https://github.com/B-Con/crypto-algorithms/blob/master/sha256.c
-__device__ void sha256_transform(AMO_SHA256_CTX *ctx) {
+__device__ bool sha256_transform(AMO_SHA256_CTX *ctx) {
   WORD x, res0, res1;
-  WORD a, b, c, d, e, f, g, h, i, t1, t2, m[64];
+  WORD a, b, c, d, e, f, f0, g, g0, h, h0, i, t1, t2, m[64];
+  bool ret = true;
 
   for (i = 0; i < 16; ++i)
     m[i] = ctx->data[i];
@@ -241,9 +227,9 @@ __device__ void sha256_transform(AMO_SHA256_CTX *ctx) {
   c = ctx->state[2];
   d = ctx->state[3];
   e = ctx->state[4];
-  f = ctx->state[5];
-  g = ctx->state[6];
-  h = ctx->state[7];
+  f0 = f = ctx->state[5];
+  g0 = g = ctx->state[6];
+  h0 = h = ctx->state[7];
 
   for (i = 0; i < 64; ++i) {
 // ep0:
@@ -283,6 +269,23 @@ __device__ void sha256_transform(AMO_SHA256_CTX *ctx) {
     g = f;
     f = e;
     e = d + t1;
+//    if (i == 60) {
+//      if ((e + h0) != 0) {
+//        return false;
+//      }
+//    }
+
+//    if (i == 61) {
+//      if ((e + g0) != 0) {
+//        return false;
+//      }
+//    }
+//
+//    if (i == 62) {
+//      if ((e + f0) != 0) {
+//        return false;
+//      }
+//    }
     d = c;
     c = b;
     b = a;
@@ -297,6 +300,7 @@ __device__ void sha256_transform(AMO_SHA256_CTX *ctx) {
   ctx->state[5] += f;
   ctx->state[6] += g;
   ctx->state[7] += h;
+  return true;
 }
 
 __device__ void sha256_init(AMO_SHA256_CTX *ctx) {

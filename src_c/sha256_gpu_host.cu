@@ -112,10 +112,30 @@ extern "C" void amoveo_stop_gpu() {
   CUDA_SAFE_CALL( cudaDeviceSynchronize() );
 
   gettimeofday(&t_end, NULL);
-  double numHashes = ((double)GDIM)*((double)BDIM)*((double)(*h_cycles));
+
+  long long int total = 0;
+  long int min_cycles = 10000000, max_cycles = 0, zero_cycles = 0;
+  for(int i = 0; i < (GDIM * BDIM); i++) {
+    long int temp = h_cycles_total[i];
+    if (temp == 0) {
+      zero_cycles++;
+//        fprintf(stderr,"temp = 0 i = %d\n", i);
+    }
+    total = total + temp;
+    if (temp < min_cycles) {
+      min_cycles = temp;
+    }
+    if (temp > max_cycles) {
+      max_cycles = temp;
+    }
+  }
+  double numHashes = (double)(total);
+//  double numHashes = ((double)GDIM)*((double)BDIM)*((double)(*h_cycles));
   double total_elapsed = (double)(t_end.tv_usec - t_start.tv_usec) / 1000000 + (double)(t_end.tv_sec - t_start.tv_sec);
 
-  fprintf(fdebug,"Cycles = %d  Hash rate = %0.2f MH/s  took time = %0.1f secs\r\n", *h_cycles, numHashes/(1000000.0*total_elapsed), total_elapsed);
+  fprintf(fdebug,"Cycles = %ld, (max=%ld, min=%ld, zero=%ld) Hash rate = %0.2f MH/s  took time = %0.1f secs\r\n",
+      total, max_cycles, min_cycles, zero_cycles, numHashes/(1000000.0 * total_elapsed), total_elapsed);
+//  fprintf(fdebug,"Cycles = %d  Hash rate = %0.2f MH/s  took time = %0.1f secs\r\n", *h_cycles, numHashes/(1000000.0*total_elapsed), total_elapsed);
   fprintf(fdebug,"Nonce   : ");
   for(int i = 0; i < 23; i++)
       fprintf(fdebug,"%02X.",h_nonce[i]);
@@ -177,7 +197,7 @@ extern "C" void amoveo_hash_gpu(BYTE *data, WORD len, BYTE *hash, WORD cycle) {
   CUDA_SAFE_CALL(cudaFreeHost(d_hash));
 }
 
-extern "C" void amoveo_gpu_alloc_mem() {
+extern "C" void amoveo_gpu_alloc_mem(int gdim, int bdim) {
   CUDA_SAFE_CALL( cudaSetDeviceFlags(cudaDeviceMapHost) );
   CUDA_SAFE_CALL( cudaHostAlloc((void **)&h_data, 32 * sizeof(BYTE), cudaHostAllocMapped) );
   CUDA_SAFE_CALL( cudaHostGetDevicePointer(&d_data, h_data, 0) );
@@ -194,10 +214,10 @@ extern "C" void amoveo_gpu_alloc_mem() {
   CUDA_SAFE_CALL( cudaHostAlloc((void **)&h_cycles, sizeof(long int), cudaHostAllocMapped) );
   CUDA_SAFE_CALL( cudaHostGetDevicePointer(&d_cycles, h_cycles, 0) );
 
-  CUDA_SAFE_CALL( cudaHostAlloc((void **)&h_cycles_total, (18 * 1024) * sizeof(long int), cudaHostAllocMapped) );
+  CUDA_SAFE_CALL( cudaHostAlloc((void **)&h_cycles_total, (gdim * bdim) * sizeof(long int), cudaHostAllocMapped) );
   CUDA_SAFE_CALL( cudaHostGetDevicePointer(&d_cycles_total, h_cycles_total, 0) );
 //  CUDA_SAFE_CALL( cudaHostAlloc((void **)&h_info_debug, 2048 * sizeof(GPU_thread_info), cudaHostAllocMapped) );
-  CUDA_SAFE_CALL( cudaHostAlloc((void **)&h_info_debug, 4 * sizeof(GPU_thread_info), cudaHostAllocMapped) );
+  CUDA_SAFE_CALL( cudaHostAlloc((void **)&h_info_debug, 1 * sizeof(GPU_thread_info), cudaHostAllocMapped) );
   CUDA_SAFE_CALL( cudaHostGetDevicePointer(&d_info_debug, h_info_debug, 0) );
   *h_stop = true;
   *h_success = false;
@@ -210,6 +230,7 @@ extern "C" void amoveo_gpu_free_mem() {
   CUDA_SAFE_CALL( cudaFreeHost(h_success) );
   CUDA_SAFE_CALL( cudaFreeHost(h_stop) );
   CUDA_SAFE_CALL( cudaFreeHost(h_cycles) );
+  CUDA_SAFE_CALL( cudaFreeHost(h_cycles_total) );
   CUDA_SAFE_CALL( cudaFreeHost(h_info_debug) );
 }
 
@@ -263,7 +284,12 @@ WORD hash_2_int(BYTE h[32]) {
         mask = mask >> 1;
       } else {
         our_diff *= 256;
-        our_diff += ((h[i] << j) + (h[i + 1] >> (8 - j)));
+        if (j == 7) {
+          our_diff += h[i + 1];
+        } else {
+          j++;
+          our_diff += (((h[i] << j)  & 0xFF) + (h[i + 1] >> (8 - j)));
+        }
         return our_diff;
       }
     }
@@ -273,7 +299,7 @@ WORD hash_2_int(BYTE h[32]) {
 
 extern "C" void test1(int difficulty, int gdim, int bdim, BYTE data[32]) {
   int n, m;
-  amoveo_gpu_alloc_mem();
+  amoveo_gpu_alloc_mem(gdim, bdim);
 
   m = 0;
   while (m < 3) {
@@ -292,9 +318,9 @@ extern "C" void test1(int difficulty, int gdim, int bdim, BYTE data[32]) {
 
     m++;
     n = 0;
-    while(n < 12) {
+    while(n < 6) {
       sleep(5);
-      fprintf(stderr,"  m=%d:n=%d, success=%d, stop=%d, cycles=%d.\r\n", m, n, *h_success, *h_stop, *h_cycles);
+      fprintf(stderr,"  m=%d:n=%d, success=%d.\r\n", m, n, *h_success);
       if (*h_success) {
         break;
       }
@@ -306,21 +332,26 @@ extern "C" void test1(int difficulty, int gdim, int bdim, BYTE data[32]) {
     fprintf(stderr,"* m=%d:n=%d, success=%d, stop=%d, cycles=%d.\r\n", m, n, *h_success, *h_stop, *h_cycles);
     gettimeofday(&t_end, NULL);
 
-    long int total = 0, min_cycles = 10000000, max_cycles = 0;
-    for(int i = 0; i < (18 * 1024); i++) {
-    	long int temp = h_cycles_total[i];
-    	total = total + temp;
-    	if (temp < min_cycles) {
-    		min_cycles = temp;
-    	}
-    	if (temp > max_cycles) {
-    		max_cycles = temp;
+    long long int total = 0;
+    long int min_cycles = 10000000, max_cycles = 0, zero_cycles = 0;
+    for(int i = 0; i < (gdim * bdim); i++) {
+      long int temp = h_cycles_total[i];
+      if (temp == 0) {
+        zero_cycles++;
+//        fprintf(stderr,"temp = 0 i = %d\n", i);
+      }
+      total = total + temp;
+      if (temp < min_cycles) {
+        min_cycles = temp;
+      }
+      if (temp > max_cycles) {
+        max_cycles = temp;
     	}
     }
-    double numHashes = ((double)gdim)*((double)bdim)*((double)(total));
+    double numHashes = (double)(total);
     double total_elapsed = (double)(t_end.tv_usec - t_start.tv_usec) / 1000000 + (double)(t_end.tv_sec - t_start.tv_sec);
 
-    fprintf(stderr,"Cycles = %d, (max=%d, min=%d) Hash rate = %0.2f MH/s  took time = %0.1f secs\r\n", total, max_cycles, min_cycles, numHashes/(1000000.0*total_elapsed), total_elapsed);
+    fprintf(stderr,"Cycles = %ld, (max=%ld, min=%ld, zero=%ld) Hash rate = %0.2f MH/s  took time = %0.1f secs\r\n", total, max_cycles, min_cycles, zero_cycles, numHashes/(1000000.0*total_elapsed), total_elapsed);
     fprintf(stderr," Nonce   : ");
     for(int i = 0; i < 23; i++)
       fprintf(stderr,"%02X.",h_nonce[i]);
@@ -360,7 +391,7 @@ extern "C" void test1(int difficulty, int gdim, int bdim, BYTE data[32]) {
 }
 
 extern "C" void test2(int gdim, int bdim) {
-  amoveo_gpu_alloc_mem();
+  amoveo_gpu_alloc_mem(gdim, bdim);
 
   *h_stop = false;
 

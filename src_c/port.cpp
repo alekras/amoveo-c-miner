@@ -13,7 +13,7 @@ extern "C" {
   char amoveo_update_gpu(BYTE *nonce, BYTE *data);
   void amoveo_stop_gpu();
   void amoveo_hash_gpu(BYTE *data, WORD len, BYTE *hash, WORD cycle);
-  void amoveo_gpu_alloc_mem();
+  void amoveo_gpu_alloc_mem(int, int);
   void amoveo_gpu_free_mem();
   void amoveo_mine_gpu(BYTE nonce[23],
                        WORD difficulty,
@@ -65,7 +65,7 @@ std::ostream&  write_32b_integer(std::ostream& s, uint32_t len) {
 
 int main(int argc, char **argv) {
   char debugfilename[16];
-  WORD GDIM = 18, BDIM = 1024;
+  WORD GDIM = 9, BDIM = 512;
 //  struct timeval t_start, t_end;
   sprintf(debugfilename,"debug%s.txt",argv[1]); //id);
   fdebug = fopen(debugfilename,"w");
@@ -82,7 +82,7 @@ int main(int argc, char **argv) {
   fflush(fdebug);
 
   try {
-    amoveo_gpu_alloc_mem();
+    amoveo_gpu_alloc_mem(GDIM, BDIM);
 // Read messages from Erlang port
     while(true) {
 // read packet length, 4 bytes

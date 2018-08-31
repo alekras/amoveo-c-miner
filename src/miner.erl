@@ -85,13 +85,13 @@ run_miners(Ports, Bhash, Period) ->
     {_Port, {data, <<"U">>}} ->
       ok;
     {_Port, {data, <<Success:8, Nonce:23/binary, Hash:32/binary>>}} ->
-     io:format("Success:~p, Nonce:~128p~n", [Success, Nonce]),
+%     io:format("Success:~p, Nonce:~128p~n", [Success, Nonce]),
       if Success == 1 ->
            io:format("Success:~p, Nonce:~128p~n Hash:~128p~n", [Success, Nonce, Hash]),
            BinNonce = base64:encode(Nonce),
            Data = <<"[\"work\",\"", BinNonce/binary, "\",\"", ?Pubkey/binary, "\"]">>,
-           check_data(Bhash, Nonce),
-           io:format("Data to server: ~128p~n", [Data]),
+%%           check_data(Bhash, Nonce),
+%           io:format("Data to server: ~128p~n", [Data]),
            RR = talk_helper(Data, ?Peer, 2),
            LL = 
            try mochijson2:decode(RR) of
@@ -101,7 +101,8 @@ run_miners(Ports, Bhash, Period) ->
              io:format(" ---- Unexpected response from server: ~128p~nError: ~p : ~p~n", [RR, E, Reason]),
              RR
            end,
-           io:format("~s Found a block. Nonce ~128p. Response from server: ~128p~n~n", [datetime_string(), BinNonce, LL]),
+           io:format("~s Found a block. Nonce ~128p. Response from server: ~128p~n", [datetime_string(), BinNonce, LL]),
+           check_data(Bhash, Nonce),
            {F1, BD1, SD1} = ask_for_work(),
            run_miners(Ports, F1, BD1, SD1, ?Treshold + 1);
          true ->
@@ -165,16 +166,18 @@ talk_helper(Data, Peer, N) ->
   end.
 
 check_data(Bhash, Nonce) ->
-  io:format(">>> check data ~n", []),
-  io:format("bhash: ~256p~n", [Bhash]),
-  io:format("nonce: ~256p~n", [Nonce]),
+%  io:format(">>> check data ~n", []),
+%  io:format("bhash: ~256p~n", [Bhash]),
+%  io:format("nonce: ~256p~n", [Nonce]),
   Y = <<Bhash/binary, Nonce/binary>>,
-  io:format("Y: ~256p~n", [Y]),
+%  io:format("Y: ~256p~n", [Y]),
   H = hash:doit(Y),
   I = pow:hash2integer(H, 1),
-  io:format("~s check data: ~256p  ~p~n", [datetime_string(), H, I]).
+  J = pow:hash2integer(H, 0),
+  io:format("~s check data: ~256p Diff: ~p / ~p~n", [datetime_string(), H, I, J]).
 
   
 datetime_string() ->
   {{_Year, Month, Day}, {Hour, Minute, Second}} = calendar:local_time(),
-  lists:concat([Month, "/", Day, "-", Hour, ":", Minute, ":", Second]).
+  lists:flatten(io_lib:format("~2.2.0w/~2.2.0w-~2.2.0w:~2.2.0w:~2.2.0w", [Month, Day, Hour, Minute, Second])).
+%%  lists:concat([Month, "/", Day, "-", Hour, ":", Minute, ":", Second]).

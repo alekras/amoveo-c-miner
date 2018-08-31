@@ -1,7 +1,5 @@
 1. move k[i] to previous step
 2. increment nounce only 12, 13
-3. delete hash2int()
-4. review hash2int_w (about masking)
 
 ------------------------------------------
 step (i): 60   61   62   63 

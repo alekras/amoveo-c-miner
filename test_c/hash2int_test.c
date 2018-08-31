@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <memory.h>
 #include <string.h>
-#include "sha256.h"
+#include "../src_c/sha256.h"
 
 /*********************** FUNCTION DEFINITIONS ***********************/
 //(256*number of leading 0 bits) + byte starting with 1.
@@ -20,7 +20,14 @@ WORD h2i(BYTE h[32]) {
         mask = mask >> 1;
       } else {
         our_diff *= 256;
-        our_diff += ((h[i] << j) + (h[i + 1] >> (8 - j)));
+        if (j == 7) {
+          our_diff += h[i + 1];
+        } else {
+          j++;
+          our_diff += (((h[i] << j)  & 0xFF) + (h[i + 1] >> (8 - j)));
+          printf(" %08X  %08X\n", h[i], (h[i] << j));
+          printf(" %08X  %08X\n", h[i+1], (((h[i + 1] >> 1) & 0x7F) >> (7 - j)));
+        }
         return our_diff;
       }
     }
@@ -61,13 +68,19 @@ WORD h2i_w(WORD h[8]) {
       } else {
         our_diff *= 256;
 //        printf(" 0) %d  ", our_diff );
+        if (j == 31) {
+          j = 0;
+          i++;
+        } else {
+          j++;
+        }
         if ((24 - j) >= 0) {
-          our_diff += (h[i] >> (24 -j));
-//          printf(" 1) %08X  %08X  ",h[i], (h[i] >> (24 -j)) );
+          our_diff += (h[i] >> (24 -j)) & 0xff;
+//          printf(" 1) %08X  %08X\n",h[i], (h[i] >> (24 -j)) & 0xff );
         } else {
 //          WORD t = ((h[i + 1] >> 1) & 0x7FFFFFFF) >> (55 - j);
           our_diff += ((h[i] << (j - 24)) + (((h[i + 1] >> 1) & 0x7FFFFFFF) >> (55 - j)));
-//          printf(" 2) %08X  %08X  ",h[i], (h[i] >> (24 -j)) );
+//          printf(" 2) %08X  %08X  %08X\n",h[i], (h[i] << (j - 24)), (((h[i + 1] >> 1) & 0x7FFFFFFF) >> (55 - j)));
         }
         return our_diff;
       }
@@ -207,7 +220,7 @@ int diffic_test()
   WORD dfc;
 
   dfc = h2i(hash1);
-  printf("Difficulty: %d\n", dfc);
+  printf("** h2i Difficulty: %d\n", dfc);
   dfc = hash2int(hash1);
   printf("Difficulty: %d\n", dfc);
   dfc = hash2integer(hash1);
@@ -225,11 +238,11 @@ int diffic_test()
 //  for(int i = 0; i < sizeof(words); i++)  printf("%08X.",words[i]);
 //  printf("\n");
   dfc = h2i_w(words);
-  printf("Difficulty: %d\n", dfc);
+  printf("** h2i_w Difficulty: %d\n", dfc);
   printf("\n");
 
   dfc = h2i(hash2);
-  printf("Difficulty: %d\n", dfc);
+  printf("** h2i Difficulty: %d\n", dfc);
   dfc = hash2int(hash2);
   printf("Difficulty: %d\n", dfc);
   dfc = hash2integer(hash2);
@@ -241,11 +254,11 @@ int diffic_test()
   dfc = h2i_rvs(hash2);
   printf("Difficulty: %d\n", dfc);
   dfc = h2i_w(words);
-  printf("Difficulty: %d\n", dfc);
+  printf("** h2i_w Difficulty: %d\n", dfc);
   printf("\n");
 
   dfc = h2i(hash3);
-  printf("Difficulty: %d\n", dfc);
+  printf("** h2i Difficulty: %d\n", dfc);
   dfc = hash2int(hash3);
   printf("Difficulty: %d\n", dfc);
   dfc = hash2integer(hash3);
@@ -257,7 +270,7 @@ int diffic_test()
   dfc = h2i_rvs(hash3);
   printf("Difficulty: %d\n", dfc);
   dfc = h2i_w(words);
-  printf("Difficulty: %d\n", dfc);
+  printf("** h2i_w Difficulty: %d\n", dfc);
   printf("\n");
   return dfc;
 }
