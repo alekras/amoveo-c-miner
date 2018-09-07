@@ -1,5 +1,4 @@
-1. move k[i] to previous step
-2. increment nounce only 12, 13
+2. increment nounce only 11, 12
 
 ------------------------------------------
 step (i): 60   61   62   63 
@@ -10,8 +9,6 @@ e         e.60 e.61 e.62
 ------------------------------------------
 
   f0 = f = ctx->state[5];
-  g0 = g = ctx->state[6];
-  h0 = h = ctx->state[7];
 
     e = d + t1;
     if (i == 60) {
@@ -20,16 +17,10 @@ e         e.60 e.61 e.62
       }
     }
 
-    if (i == 61) {
-      if (((e + g0) != 0) {
-        return false;
-      }
-    }
-
-    if (i == 62) {
-      if (((e + f0) != 0) {
-        return false;
-      }
-    }
+3. investigate why miner.erl not ask for work starting 55 sec.
+4. do not check hash in gpu_host.cu
+5. 
 
 
+https://www.tutorialspoint.com/cuda
+https://docs.nvidia.com/cuda/cuda-c-programming-guide/
