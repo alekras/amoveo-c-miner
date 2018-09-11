@@ -21,6 +21,7 @@ extern "C" {
                        WORD GDIM,
                        WORD BDIM,
                        WORD id);
+  void gpu_info(int device);
   FILE *fdebug;
 }
 
@@ -83,6 +84,7 @@ int main(int argc, char **argv) {
 
   try {
     amoveo_gpu_alloc_mem(GDIM, BDIM);
+    gpu_info(id);
 // Read messages from Erlang port
     while(true) {
 // read packet length, 4 bytes

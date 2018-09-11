@@ -11,13 +11,14 @@
 
 -ifdef(MACOS).
   -define(Treshold, 7).%how long to wait in seconds before checking if new mining data is available.
-  -define(TracePeriod, 1).%how long to wait in seconds while checking for changing mining data.
+  -define(TracePeriod_1, 1).%how long to wait in seconds while checking for changing mining data.
   -define(Pool_sleep_period, 1).%How long to wait in miliseconds if we cannot connect to the mining pool.
   -define(Miner_sleep, 10). %This is how you reduce the load on CPU. It sleeps this long in miliseconds between mining cycles.
   -define(HTTPC, httpc_mock).
 -else.
   -define(Treshold, 54).%how long to wait in seconds before checking if new mining data is available.
-  -define(TracePeriod, 2).%how long to wait in seconds while checking for changing mining data.
+  -define(TracePeriod_1, 2).%how long to wait in seconds while checking for success in GPU.
+  -define(TracePeriod_2, 1).%how long to wait in seconds while checking for changing mining data.
   -define(Pool_sleep_period, 1000).%How long to wait in miliseconds if we cannot connect to the mining pool.
   -define(Miner_sleep, 1000). %This is how you reduce the load on CPU. It sleeps this long in miliseconds between mining cycles.
   -define(HTTPC, httpc).
@@ -56,7 +57,7 @@ flush() ->
 unpack_mining_data(R) ->
   [<<"ok">>, [_, Hash, BlockDiff, ShareDiff]] = mochijson2:decode(R),
   F = base64:decode(Hash),
-  io:format("~s ask for work. Server responce: Hash:~256p Diff:~p / ~p~n", [datetime_string(), F, BlockDiff, ShareDiff]),
+%%  io:format("~s ask for work: Hash:~256p Diff:~p / ~p~n", [datetime_string(), F, BlockDiff, ShareDiff]),
   case ?USE_SHARE_POOL of
 	  true ->
       {F, BlockDiff, ShareDiff};
@@ -66,11 +67,12 @@ unpack_mining_data(R) ->
 
 start_c_miners(Ports) ->
   {F, BD, SD} = ask_for_work(),
-  run_miners(Ports, F, BD, SD, ?Treshold + 1),
+  io:format("~s ASK for work: Hash:~256p Diff:~p / ~p~n", [datetime_string(), F, BD, SD]),
+  start_miner_step(Ports, F, BD, SD, ?Treshold),
 %%  [Port ! {self(), close} || {_, Port} <- Ports],
   start().
 
-run_miners(Ports, F, BD, SD, Period) ->
+start_miner_step(Ports, F, BD, SD, Period) ->
   RS = crypto:strong_rand_bytes(23),
   flush(),
   [Port ! {self(), {command, <<"I", F/binary, RS/binary, BD:32/integer, SD:32/integer, Core_id:32/integer>>}} || {Core_id, Port} <- Ports],
@@ -104,7 +106,8 @@ run_miners(Ports, Bhash, Period) ->
            io:format("~s Found a block. Nonce ~128p. Response from server: ~128p~n", [datetime_string(), BinNonce, LL]),
            check_data(Bhash, Nonce),
            {F1, BD1, SD1} = ask_for_work(),
-           run_miners(Ports, F1, BD1, SD1, ?Treshold + 1);
+           io:format("~s/~2.2.0w Ask for work: Hash:~256p Diff:~p / ~p~n", [datetime_string(), Period, F1, BD1, SD1]),
+           start_miner_step(Ports, F1, BD1, SD1, ?Treshold);
          true ->
            ok %%io:format("~s Did not find a block in that period~n", [datetime_string()])
       end;
@@ -116,28 +119,29 @@ run_miners(Ports, Bhash, Period) ->
       start()
   end,
 
-  timer:sleep(?TracePeriod * 1000),
-  
-  if Period > ?Treshold ->
+  if Period >= ?Treshold ->
 %    io:format("~s Timeout, ask for work. ~n", [datetime_string()]),
-    {F, BD, SD} = ask_for_work(),
-    if F =:= Bhash ->
-	       run_miners(Ports, Bhash, Period + ?TracePeriod);
-	     true ->
-         flush(),
-         [Port ! {self(), {command, <<"S">>}} || {_Core_id, Port} <- Ports],
+      timer:sleep(?TracePeriod_2 * 1000),
+      {F, BD, SD} = ask_for_work(),
+      io:format("~s#~2.2.0w ask for work: Hash:~256p Diff:~p / ~p~n", [datetime_string(), Period, F, BD, SD]),
+      if F =:= Bhash ->
+           run_miners(Ports, Bhash, Period + ?TracePeriod_2);
+         true ->
+           flush(),
+           [Port ! {self(), {command, <<"S">>}} || {_Core_id, Port} <- Ports],
 %         io:format("~s Sent command 'S'~n", [datetime_string()]),
-         receive
-           {_, {data, <<"S">>}} ->
-             run_miners(Ports, F, BD, SD, 0);
-           Err1 -> 
-             io:format("S) Err from port: ~p", [Err1])
-         after 10000 ->
-           io:format("~s S) PORT timeout error: ~n", [datetime_string()])
-         end
-    end;
+           receive
+             {_, {data, <<"S">>}} ->
+               start_miner_step(Ports, F, BD, SD, 0);
+             Err1 -> 
+               io:format("S) Err from port: ~p", [Err1])
+           after 10000 ->
+             io:format("~s S) PORT timeout error: ~n", [datetime_string()])
+           end
+      end;
     true ->
-      run_miners(Ports, Bhash, Period + ?TracePeriod)
+      timer:sleep(?TracePeriod_1 * 1000),
+      run_miners(Ports, Bhash, Period + ?TracePeriod_1)
   end.
 
 start_many(N) when N < 1 -> [];

@@ -51,7 +51,7 @@ static BYTE *h_data, *d_data;
 //static BYTE *h_hash, *d_hash;
 static BYTE *h_nonce, *d_nonce;
 static bool *h_success, *d_success;
-static bool stop, *h_stop, *d_stop;
+static bool /*stop,*/ *h_stop, *d_stop;
 static long int *h_cycles, *d_cycles;
 
 extern "C" bool amoveo_update_gpu(BYTE *nonce, BYTE *data) {
@@ -162,20 +162,6 @@ extern "C" void amoveo_stop_gpu() {
 extern "C" void amoveo_hash_gpu(BYTE *data, WORD len, BYTE *hash, WORD cycle) {
   BYTE *h_data, *d_data;
   BYTE *h_hash, *d_hash;
-//  cudaDeviceProp prop;
-//  CUDA_SAFE_CALL( cudaGetDeviceProperties (&prop, 0) );
-//  fprintf(stderr," MultiProcessor Count = %d\n", prop.multiProcessorCount);
-//  fprintf(stderr," Maximum number of threads per block = %d\n", prop.maxThreadsPerBlock);
-//  fprintf(stderr," maxThreadsDim[3] contains the maximum size of each dimension of a block = [%d,%d,%d]\n", prop.maxThreadsDim[0],prop.maxThreadsDim[1],prop.maxThreadsDim[2]);
-//  fprintf(stderr," maxGridSize[3] contains the maximum size of each dimension of a grid = [%d,%d,%d]\n", prop.maxGridSize[0],prop.maxGridSize[1],prop.maxGridSize[2]);
-//  fprintf(stderr," canMapHostMemory is 1 if the device can map host memory into the CUDA address space for use with cudaHostAlloc()/cudaHostGetDevicePointer(), or 0 if not = %d\n", prop.canMapHostMemory);
-//
-//  fprintf(stderr," asyncEngineCount is 1 when the device can concurrently copy memory between host and device while executing a kernel.\n");
-//  fprintf(stderr,"   It is 2 when the device can concurrently copy memory between host and device in both directions and execute a kernel at the same time.\n");
-//  fprintf(stderr,"   It is 0 if neither of these is supported = %d\n", prop.asyncEngineCount);
-//  fprintf(stderr," unifiedAddressing is 1 if the device shares a unified address space with the host and 0 otherwise = %d\n", prop.unifiedAddressing);
-//  fprintf(stderr," maxThreadsPerMultiProcessor is the number of maximum resident threads per multiprocessor = %d\n", prop.maxThreadsPerMultiProcessor);
-//  fflush(stderr);
 
   CUDA_SAFE_CALL( cudaHostAlloc((void **)&h_data, len * sizeof(BYTE), cudaHostAllocMapped) );
   CUDA_SAFE_CALL( cudaHostGetDevicePointer(&d_data, h_data, 0) );
@@ -185,7 +171,7 @@ extern "C" void amoveo_hash_gpu(BYTE *data, WORD len, BYTE *hash, WORD cycle) {
   CUDA_SAFE_CALL( cudaHostAlloc((void **)&h_hash, 32 * sizeof(BYTE), cudaHostAllocMapped) );
   CUDA_SAFE_CALL( cudaHostGetDevicePointer(&d_hash, h_hash, 0) );
 
-  kernel_sha256_val<<<1, 1>>>(d_data, len, d_hash, cycle);
+  kernel_sha256_val<<<1,1>>>(d_data, len, d_hash, cycle);
 
   CUDA_SAFE_CALL( cudaDeviceSynchronize() );
 
@@ -195,6 +181,39 @@ extern "C" void amoveo_hash_gpu(BYTE *data, WORD len, BYTE *hash, WORD cycle) {
 //Free memory on device
   CUDA_SAFE_CALL(cudaFreeHost(h_data));
   CUDA_SAFE_CALL(cudaFreeHost(d_hash));
+}
+
+extern "C" void gpu_info(int device) {
+  cudaDeviceProp prop;
+  CUDA_SAFE_CALL( cudaGetDeviceProperties(&prop, device) );
+  fprintf(fdebug," -- name = %s\n", prop.name);
+  fprintf(fdebug," -- totalGlobalMem is the total amount of global memory available on the device in bytes = %s\n", prop.totalGlobalMem);
+  fprintf(fdebug," -- totalConstMem = %d is the total amount of constant memory available on the device in bytes.\n", prop.totalConstMem);
+
+  fprintf(fdebug," -- multiProcessor Count = %d\n", prop.multiProcessorCount);
+  fprintf(fdebug," -- maxThreadsPerMultiProcessor is the number of maximum resident threads per multiprocessor = %d\n", prop.maxThreadsPerMultiProcessor);
+  fprintf(fdebug," -- warpSize = %d is the warp size in threads.\n", prop.warpSize);
+  fprintf(fdebug," -- sharedMemPerMultiprocessor = %d is the maximum amount of shared memory available to a multiprocessor in bytes;\n", prop.sharedMemPerMultiprocessor);
+  fprintf(fdebug,"       this amount is shared by all thread blocks simultaneously resident on a multiprocessor.\n");
+  fprintf(fdebug," -- regsPerMultiprocessor = %d is the maximum number of 32-bit registers available to a multiprocessor;\n", prop.regsPerMultiprocessor);
+  fprintf(fdebug,"    this number is shared by all thread blocks simultaneously resident on a multiprocessor\n");
+
+  fprintf(fdebug," -- clockRate = %d is the clock frequency in kilohertz.\n", prop.clockRate);
+  fprintf(fdebug," -- memoryClockRate = %d is the peak memory clock frequency in kilohertz.\n", prop.memoryClockRate);
+  fprintf(fdebug," -- major = %d, minor = %d are the major and minor revision numbers defining the device's compute capability.\n", prop.major, prop.minor);
+  fprintf(fdebug," -- computeMode = %d is the compute mode that the device is currently in.\n", prop.computeMode);
+
+  fprintf(fdebug," -- maxThreadsPerBlock = %d is maximum number of threads per block.\n", prop.maxThreadsPerBlock);
+  fprintf(fdebug," -- sharedMemPerBlock = %d is the maximum amount of shared memory available to a thread block in bytes.\n", prop.sharedMemPerBlock);
+  fprintf(fdebug," -- regsPerBlock = %d is the maximum number of 32-bit registers available to a thread block.\n", prop.regsPerBlock);
+  fprintf(fdebug," -- maxThreadsDim[3] = [%d,%d,%d] contains the maximum size of each dimension of a block.\n", prop.maxThreadsDim[0],prop.maxThreadsDim[1],prop.maxThreadsDim[2]);
+  fprintf(fdebug," -- maxGridSize[3] = [%d,%d,%d] contains the maximum size of each dimension of a grid.\n", prop.maxGridSize[0],prop.maxGridSize[1],prop.maxGridSize[2]);
+  fprintf(fdebug," -- canMapHostMemory = %d is 1 if the device can map host memory into the CUDA address space for use with cudaHostAlloc()/cudaHostGetDevicePointer(), or 0 if not.\n", prop.canMapHostMemory);
+  fprintf(fdebug," -- asyncEngineCount = %d is 1 when the device can concurrently copy memory between host and device while executing a kernel.\n", prop.asyncEngineCount);
+  fprintf(fdebug,"       It is 2 when the device can concurrently copy memory between host and device in both directions and execute a kernel at the same time.\n");
+  fprintf(fdebug,"       It is 0 if neither of these is supported.\n");
+  fprintf(fdebug," -- unifiedAddressing = %d is 1 if the device shares a unified address space with the host and 0 otherwise.\n", prop.unifiedAddressing);
+  fflush(fdebug);
 }
 
 extern "C" void amoveo_gpu_alloc_mem(int gdim, int bdim) {
@@ -288,7 +307,8 @@ WORD hash_2_int(BYTE h[32]) {
           our_diff += h[i + 1];
         } else {
           j++;
-          our_diff += (((h[i] << j)  & 0xFF) + (h[i + 1] >> (8 - j)));
+//          our_diff += (((h[i] << j)  & 0xFF) + (h[i + 1] >> (8 - j)));
+          our_diff += (((h[i] << j)  & 0xFF) + (((h[i + 1] >> 1) & 0x7F) >> (7 - j)));
         }
         return our_diff;
       }
@@ -395,7 +415,7 @@ extern "C" void test2(int gdim, int bdim) {
 
   *h_stop = false;
 
-  kernel_test<<<gdim, bdim>>>(d_stop, d_cycles, d_info_debug);
+//  kernel_test<<<gdim, bdim>>>(d_stop, d_cycles, d_info_debug);
 
   int n = 0;
   while(n < 10) {
