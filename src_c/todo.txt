@@ -17,10 +17,12 @@ e         e.60 e.61 e.62
       }
     }
 
-3. investigate why miner.erl not ask for work starting 55 sec.
+done 3. investigate why miner.erl not ask for work starting 55 sec.
 4. do not check hash in gpu_host.cu
 5. 
 
 
 https://www.tutorialspoint.com/cuda
 https://docs.nvidia.com/cuda/cuda-c-programming-guide/
+https://devblogs.nvidia.com/using-shared-memory-cuda-cc/
+

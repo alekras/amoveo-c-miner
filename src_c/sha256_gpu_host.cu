@@ -262,33 +262,17 @@ extern "C" void amoveo_mine_gpu(BYTE nonce[23],
   GDIM = gdim;
   BDIM = bdim;
   saved_difficulty = difficulty;
-//Initialize Cuda Grid variables
-//  dim3 DimGrid(gdim, gdim);
-//  dim3 DimBlock(bdim,1);
-//  fprintf(stderr,"GPU: >>> Amoveo mine gpu(diff = %d)\r\n", difficulty);
 
 //Copy data to device
   memcpy(h_data, data, 32 * sizeof(BYTE));
   memcpy(h_nonce, nonce, 23 * sizeof(BYTE));
   memcpy(text, data, 32 * sizeof(BYTE));
-//  fprintf(fdebug,"{Nonce} : ");
-//  for(int i = 0; i < 23; i++)
-//      fprintf(fdebug,"%02X.",nonce[i]);
-//  fprintf(fdebug,"\n");
-//  fprintf(fdebug,"{Data}  : ");
-//  for(int i = 0; i < 32; i++)
-//      fprintf(fdebug,"%02X.",data[i]);
-//  fprintf(fdebug,"\n");
-//  fflush(fdebug);
-//  for (int i = 0; i < 2048; i++) {
-//    h_info_debug[i].flag = 0;
-//  }
 
   *h_success = false;
   *h_stop = false;
 
   gettimeofday(&t_start, NULL);
-  kernel_sha256<<<gdim, bdim>>>(d_data, difficulty, d_nonce, d_success, d_stop, d_cycles, device_id, d_cycles_total);
+  kernel_sha256<<<gdim, bdim, (bdim * 64 * sizeof(WORD))>>>(d_data, difficulty, d_nonce, d_success, d_stop, d_cycles, device_id, d_cycles_total);
 //  fprintf(stderr,"GPU: <<< Amoveo mine gpu\r\n");
 }
 

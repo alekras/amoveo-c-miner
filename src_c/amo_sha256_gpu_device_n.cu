@@ -138,12 +138,15 @@ __global__ void kernel_test(volatile bool *stop, volatile long int *cycles, GPU_
   }
 }
 */
+
+extern __shared__ WORD shared_memory[];
+
 __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile bool *success, volatile bool *stop, volatile long int *cycles, WORD device_id, long int * cycles_total) {
   int i, j, work;
   long int r;
   long int idx = blockIdx.x * blockDim.x + threadIdx.x;
   AMO_SHA256_CTX ctx;
-  WORD m[64];
+  WORD *m = &shared_memory[64 * threadIdx.x];
 
   #pragma unroll 1
   for (i = 0, j = 0; i < 8; ++i, j += 4) {
@@ -224,10 +227,10 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
 }
 
 __device__ WORD hash2int_w(WORD h[8]) {
-  WORD our_diff = 0;
+  WORD our_diff = 0, mask;
 
   for(int i = 0; i < 8; i++) {
-    WORD mask = 0x80000000;
+    mask = 0x80000000;
     for(int j = 0; j < 32; j++) {
       if ( (h[i] & mask) == 0 ) {
         our_diff++;
@@ -253,7 +256,7 @@ __device__ WORD hash2int_w(WORD h[8]) {
 }
 
 //Constants for SHA-256
-__device__ static const WORD k[64] = {
+__device__ __constant__ static const WORD k[64] = {
   0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
   0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
   0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
@@ -276,14 +279,14 @@ __device__ void sha256_msg_scheduler(AMO_SHA256_CTX *ctx, WORD *m) {
     x = m[i - 15];
     sig0(x, res0)
     x = m[i - 2];
-    sig1(x,res1)
+    sig1(x, res1)
 
     m[i] = res1 + m[i - 7] + res0 + m[i - 16];
   }
 }
 __device__ bool sha256_msg_compression(AMO_SHA256_CTX *ctx, WORD *m) {
-  WORD x, res0, res1;
-  WORD a, b, c, d, e, f, g, h, h0, i, t1;
+  WORD res0, res1;
+  WORD a, b, c, d, e, f, g, h, i, t1;
 
   a = ctx->state[0];
   b = ctx->state[1];
@@ -292,7 +295,7 @@ __device__ bool sha256_msg_compression(AMO_SHA256_CTX *ctx, WORD *m) {
   e = ctx->state[4];
   f = ctx->state[5];
   g = ctx->state[6];
-  h0 = h = ctx->state[7];
+  h = ctx->state[7];
 
   for (i = 0; i < 64; ++i) {
     ep0(a,res0)
@@ -304,12 +307,12 @@ __device__ bool sha256_msg_compression(AMO_SHA256_CTX *ctx, WORD *m) {
     f = e;
     e = d + t1;
     if (i == 60) {
-      x = (e + h0);
-      if ((x & 0xffff0000) != 0) {
+      if (((e + 0x5be0cd19) & 0xffff0000) != 0) {
         return false;
-      } else {
-//        printf("h0=%08X e=%08X x=%08X\n", h0, e, x);
       }
+//      else {
+//        printf("h0=%08X e=%08X x=%08X\n", h0, e, x);
+//      }
     }
 
     d = c;
