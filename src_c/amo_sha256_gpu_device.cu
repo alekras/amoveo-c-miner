@@ -112,7 +112,7 @@ extern "C" {
         " xor.b32            %0, t1, t2;\n\t" \
         "}" \
         : "=r"(res) : "r" (x));
-
+/*
 __global__ void kernel_test(volatile bool *stop, volatile long int *cycles, GPU_thread_info * info_debug) {
   int i, k;
   long int r;
@@ -137,6 +137,9 @@ __global__ void kernel_test(volatile bool *stop, volatile long int *cycles, GPU_
     info_debug[idx - sizeRow + 1000].flag = r;
   }
 }
+*/
+
+//extern __shared__ WORD shared_memory[];
 
 __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile bool *success, volatile bool *stop, volatile long int *cycles, WORD device_id, long int * cycles_total) {
   int i, j, work;

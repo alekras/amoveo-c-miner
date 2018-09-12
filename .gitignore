@@ -27,4 +27,3 @@ rebar3.crashdump
 #*
 .#*
 /rebar.lock
-/assembler_code/

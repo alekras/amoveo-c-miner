@@ -187,7 +187,7 @@ extern "C" void gpu_info(int device) {
   cudaDeviceProp prop;
   CUDA_SAFE_CALL( cudaGetDeviceProperties(&prop, device) );
   fprintf(fdebug," -- name = %s\n", prop.name);
-  fprintf(fdebug," -- totalGlobalMem is the total amount of global memory available on the device in bytes = %s\n", prop.totalGlobalMem);
+  fprintf(fdebug," -- totalGlobalMem = %d is the total amount of global memory available on the device in bytes.\n", prop.totalGlobalMem);
   fprintf(fdebug," -- totalConstMem = %d is the total amount of constant memory available on the device in bytes.\n", prop.totalConstMem);
 
   fprintf(fdebug," -- multiProcessor Count = %d\n", prop.multiProcessorCount);
@@ -272,7 +272,8 @@ extern "C" void amoveo_mine_gpu(BYTE nonce[23],
   *h_stop = false;
 
   gettimeofday(&t_start, NULL);
-  kernel_sha256<<<gdim, bdim, (bdim * 64 * sizeof(WORD))>>>(d_data, difficulty, d_nonce, d_success, d_stop, d_cycles, device_id, d_cycles_total);
+//  kernel_sha256<<<gdim, bdim, (bdim * 64 * sizeof(WORD))>>>(d_data, difficulty, d_nonce, d_success, d_stop, d_cycles, device_id, d_cycles_total);
+  kernel_sha256<<<gdim, bdim>>>(d_data, difficulty, d_nonce, d_success, d_stop, d_cycles, device_id, d_cycles_total);
 //  fprintf(stderr,"GPU: <<< Amoveo mine gpu\r\n");
 }
 

@@ -1,0 +1,59 @@
+1. move k[i] to previous step
+2. increment nounce only 12, 13
+
+------------------------------------------
+step (i): 60   61   62   63 
+h         h.60 g.60 f.60 e.60 
+g         g.60 f.60 e.60 e.61     
+f         f.60 e.60 e.61 e.62        
+e         e.60 e.61 e.62         
+------------------------------------------
+
+  f0 = f = ctx->state[5];
+  g0 = g = ctx->state[6];
+  h0 = h = ctx->state[7];
+
+    e = d + t1;
+    if (i == 60) {
+      if (((e + h0) != 0) {
+        return false;
+      }
+    }
+
+    if (i == 61) {
+      if (((e + g0) != 0) {
+        return false;
+      }
+    }
+
+    if (i == 62) {
+      if (((e + f0) != 0) {
+        return false;
+      }
+    }
+
+ -- name = GeForce GTX 1060 3GB
+ -- totalGlobalMem = -1129250816 is the total amount of global memory available on the device in bytes.
+ -- totalConstMem = 65536 is the total amount of constant memory available on the device in bytes.
+ -- multiProcessor Count = 9
+ -- maxThreadsPerMultiProcessor = 2048 is the number of maximum resident threads per multiprocessor.
+ -- warpSize = 32 is the warp size in threads.
+ -- sharedMemPerMultiprocessor = 98304 is the maximum amount of shared memory available to a multiprocessor in bytes;
+       this amount is shared by all thread blocks simultaneously resident on a multiprocessor.
+ -- regsPerMultiprocessor = 65536 is the maximum number of 32-bit registers available to a multiprocessor;
+       this number is shared by all thread blocks simultaneously resident on a multiprocessor
+ -- clockRate = 1835000 is the clock frequency in kilohertz.
+ -- memoryClockRate = 4004000 is the peak memory clock frequency in kilohertz.
+ -- major = 6, minor = 1 are the major and minor revision numbers defining the device's compute capability.
+ -- computeMode = 0 is the compute mode that the device is currently in.
+ -- maxThreadsPerBlock = 1024 is maximum number of threads per block.
+ -- sharedMemPerBlock = 49152 is the maximum amount of shared memory available to a thread block in bytes.
+ -- regsPerBlock = 65536 is the maximum number of 32-bit registers available to a thread block.
+ -- maxThreadsDim[3] = [1024,1024,64] contains the maximum size of each dimension of a block.
+ -- maxGridSize[3] = [2147483647,65535,65535] contains the maximum size of each dimension of a grid.
+ -- canMapHostMemory = 1 is 1 if the device can map host memory into the CUDA address space for use with cudaHostAlloc()/cudaHostGetDevicePointer(), or 0 if not.
+ -- asyncEngineCount = 2 is 1 when the device can concurrently copy memory between host and device while executing a kernel.
+       It is 2 when the device can concurrently copy memory between host and device in both directions and execute a kernel at the same time.
+       It is 0 if neither of these is supported.
+ -- unifiedAddressing = 1 is 1 if the device shares a unified address space with the host and 0 otherwise.
+

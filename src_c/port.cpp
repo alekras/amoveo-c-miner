@@ -66,7 +66,7 @@ std::ostream&  write_32b_integer(std::ostream& s, uint32_t len) {
 
 int main(int argc, char **argv) {
   char debugfilename[16];
-  WORD GDIM = 9, BDIM = 512;
+  WORD GDIM = 9, BDIM = 384;
 //  struct timeval t_start, t_end;
   sprintf(debugfilename,"debug%s.txt",argv[1]); //id);
   fdebug = fopen(debugfilename,"w");
