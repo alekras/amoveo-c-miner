@@ -139,14 +139,15 @@ __global__ void kernel_test(volatile bool *stop, volatile long int *cycles, GPU_
 }
 */
 
-extern __shared__ WORD shared_memory[];
+//extern __shared__ WORD shared_memory[];
 
 __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile bool *success, volatile bool *stop, volatile long int *cycles, WORD device_id, long int * cycles_total) {
   int i, j, work;
   long int r;
   long int idx = blockIdx.x * blockDim.x + threadIdx.x;
   AMO_SHA256_CTX ctx;
-  WORD *m = &shared_memory[64 * threadIdx.x];
+//  WORD *m = &shared_memory[64 * threadIdx.x];
+  WORD m[64];
 
   #pragma unroll 1
   for (i = 0, j = 0; i < 8; ++i, j += 4) {

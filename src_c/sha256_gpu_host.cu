@@ -319,6 +319,7 @@ extern "C" void test1(int difficulty, int gdim, int bdim, BYTE data[32]) {
     gettimeofday(&t_start, NULL);
     h_nonce[0] = (BYTE)t_start.tv_usec;
     h_nonce[22] = (BYTE)(t_start.tv_usec >> 8);
+//    kernel_sha256<<<gdim, bdim, (bdim * 64 * sizeof(WORD))>>>(d_data, difficulty, d_nonce, d_success, d_stop, d_cycles, 0, d_cycles_total);
     kernel_sha256<<<gdim, bdim>>>(d_data, difficulty, d_nonce, d_success, d_stop, d_cycles, 0, d_cycles_total);
 
     m++;
