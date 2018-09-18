@@ -132,7 +132,11 @@ run_miners(Ports, Bhash, Period) ->
 %         io:format("~s Sent command 'S'~n", [datetime_string()]),
            receive
              {_, {data, <<"S">>}} ->
-               start_miner_step(Ports, F, BD, SD, 0);
+               if Period =:= ?Treshold ->
+                 start_miner_step(Ports, F, BD, SD, 10);
+                  true ->
+                 start_miner_step(Ports, F, BD, SD, 0)
+               end;
              Err1 -> 
                io:format("S) Err from port: ~p", [Err1])
            after 10000 ->

@@ -216,7 +216,8 @@ extern "C" void gpu_info(int device) {
   fflush(fdebug);
 }
 
-extern "C" void amoveo_gpu_alloc_mem(int gdim, int bdim) {
+extern "C" void amoveo_gpu_alloc_mem(int device, int gdim, int bdim) {
+  CUDA_SAFE_CALL( cudaSetDevice(device) );
   CUDA_SAFE_CALL( cudaSetDeviceFlags(cudaDeviceMapHost) );
   CUDA_SAFE_CALL( cudaHostAlloc((void **)&h_data, 32 * sizeof(BYTE), cudaHostAllocMapped) );
   CUDA_SAFE_CALL( cudaHostGetDevicePointer(&d_data, h_data, 0) );
@@ -302,9 +303,9 @@ WORD hash_2_int(BYTE h[32]) {
   return our_diff;
 }
 
-extern "C" void test1(int difficulty, int gdim, int bdim, BYTE data[32]) {
+extern "C" void test1(int device, int difficulty, int gdim, int bdim, BYTE data[32]) {
   int n, m;
-  amoveo_gpu_alloc_mem(gdim, bdim);
+  amoveo_gpu_alloc_mem(device, gdim, bdim);
 
   m = 0;
   while (m < 3) {
@@ -319,8 +320,8 @@ extern "C" void test1(int difficulty, int gdim, int bdim, BYTE data[32]) {
     gettimeofday(&t_start, NULL);
     h_nonce[0] = (BYTE)t_start.tv_usec;
     h_nonce[22] = (BYTE)(t_start.tv_usec >> 8);
-//    kernel_sha256<<<gdim, bdim, (bdim * 64 * sizeof(WORD))>>>(d_data, difficulty, d_nonce, d_success, d_stop, d_cycles, 0, d_cycles_total);
-    kernel_sha256<<<gdim, bdim>>>(d_data, difficulty, d_nonce, d_success, d_stop, d_cycles, 0, d_cycles_total);
+    kernel_sha256<<<gdim, bdim, (bdim * 64 * sizeof(WORD))>>>(d_data, difficulty, d_nonce, d_success, d_stop, d_cycles, 0, d_cycles_total);
+//    kernel_sha256<<<gdim, bdim>>>(d_data, difficulty, d_nonce, d_success, d_stop, d_cycles, 0, d_cycles_total);
 
     m++;
     n = 0;
@@ -335,7 +336,7 @@ extern "C" void test1(int difficulty, int gdim, int bdim, BYTE data[32]) {
     *h_stop = true;
     CUDA_SAFE_CALL( cudaDeviceSynchronize() );
 
-    fprintf(stderr,"* m=%d:n=%d, success=%d, stop=%d, cycles=%d.\r\n", m, n, *h_success, *h_stop, *h_cycles);
+    fprintf(stderr,"* m=%d:n=%d, success=%d, stop=%d, cycles=%d.\r\n", m, n-1, *h_success, *h_stop, *h_cycles);
     gettimeofday(&t_end, NULL);
 
     long long int total = 0;
@@ -396,8 +397,8 @@ extern "C" void test1(int difficulty, int gdim, int bdim, BYTE data[32]) {
   amoveo_gpu_free_mem();
 }
 
-extern "C" void test2(int gdim, int bdim) {
-  amoveo_gpu_alloc_mem(gdim, bdim);
+extern "C" void test2(int device, int gdim, int bdim) {
+  amoveo_gpu_alloc_mem(device, gdim, bdim);
 
   *h_stop = false;
 

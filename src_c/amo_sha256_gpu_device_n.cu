@@ -139,7 +139,7 @@ __global__ void kernel_test(volatile bool *stop, volatile long int *cycles, GPU_
 }
 */
 
-//extern __shared__ WORD shared_memory[];
+extern __shared__ WORD shared_memory[];
 
 __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile bool *success, volatile bool *stop, volatile long int *cycles, WORD device_id, long int * cycles_total) {
   int i, j, work;
@@ -182,42 +182,35 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
     if ((++ctx.data[11]) == 0) {
       ctx.data[12]++;
     }
-//    for (i = 11; i < 13; i++) { // do not touch [13]
-//      ctx.data[i]++;
-//      if (ctx.data[i] != 0) {
-//        break;
-//      }
-//    }
 
     r++;
     sha256_init(&ctx);
 //    sha256_transform(&ctx);
     sha256_msg_scheduler(&ctx, m);
-    if (sha256_msg_compression(&ctx, m)) {
-      work = hash2int_w(ctx.state);
-      if( work > difficulty) {
-        *success = true;
-        *stop = true;
-        BYTE * ptrn = (BYTE*)(&(ctx.data[8]));
-        #pragma unroll 1
-        for (i = 0; i < 20; i += 4) {
-          nonce[i]     = *(ptrn + 3 + i);
-          nonce[i + 1] = *(ptrn + 2 + i);
-          nonce[i + 2] = *(ptrn + 1 + i);
-          nonce[i + 3] = *(ptrn + i);
-        }
+    sha256_msg_compression(&ctx, m);
+    work = hash2int_w(ctx.state);
+    if( work > difficulty) {
+      *success = true;
+      *stop = true;
+      BYTE * ptrn = (BYTE*)(&(ctx.data[8]));
+      #pragma unroll 1
+      for (i = 0; i < 20; i += 4) {
         nonce[i]     = *(ptrn + 3 + i);
         nonce[i + 1] = *(ptrn + 2 + i);
         nonce[i + 2] = *(ptrn + 1 + i);
+        nonce[i + 3] = *(ptrn + i);
+      }
+      nonce[i]     = *(ptrn + 3 + i);
+      nonce[i + 1] = *(ptrn + 2 + i);
+      nonce[i + 2] = *(ptrn + 1 + i);
 
-        BYTE * ptr = (BYTE*)ctx.state;
-        #pragma unroll 1
-        for (i = 0; i < 32; i += 4) {
-          data[i]     = *(ptr + 3 + i);
-          data[i + 1] = *(ptr + 2 + i);
-          data[i + 2] = *(ptr + 1 + i);
-          data[i + 3] = *(ptr + i);
-        }
+      BYTE * ptr = (BYTE*)ctx.state;
+      #pragma unroll 1
+      for (i = 0; i < 32; i += 4) {
+        data[i]     = *(ptr + 3 + i);
+        data[i + 1] = *(ptr + 2 + i);
+        data[i + 2] = *(ptr + 1 + i);
+        data[i + 3] = *(ptr + i);
       }
     }
   }
@@ -271,21 +264,21 @@ __device__ __constant__ static const WORD k[64] = {
 //SHA-256 functions taken from Brad Conte's implementation
 //https://github.com/B-Con/crypto-algorithms/blob/master/sha256.c
 __device__ void sha256_msg_scheduler(AMO_SHA256_CTX *ctx, WORD *m) {
-  WORD i, x, res0, res1;
+  WORD i, res0, res1;
 
+//#pragma unroll 1
   for (i = 0; i < 16; ++i)
     m[i] = ctx->data[i];
 
+//#pragma unroll 1
   for ( ; i < 64; ++i) {
-    x = m[i - 15];
-    sig0(x, res0)
-    x = m[i - 2];
-    sig1(x, res1)
+    sig0(m[i - 15], res0)
+    sig1(m[i - 2], res1)
 
     m[i] = res1 + m[i - 7] + res0 + m[i - 16];
   }
 }
-__device__ bool sha256_msg_compression(AMO_SHA256_CTX *ctx, WORD *m) {
+__device__ void sha256_msg_compression(AMO_SHA256_CTX *ctx, WORD *m) {
   WORD res0, res1;
   WORD a, b, c, d, e, f, g, h, i, t1;
 
@@ -298,7 +291,8 @@ __device__ bool sha256_msg_compression(AMO_SHA256_CTX *ctx, WORD *m) {
   g = ctx->state[6];
   h = ctx->state[7];
 
-  for (i = 0; i < 64; ++i) {
+//#pragma unroll 1
+  for (i = 0; i < 64; i++) {
     ep0(a,res0)
     ep1(e,res1)
 
@@ -307,15 +301,6 @@ __device__ bool sha256_msg_compression(AMO_SHA256_CTX *ctx, WORD *m) {
     g = f;
     f = e;
     e = d + t1;
-    if (i == 60) {
-      if (((e + 0x5be0cd19) & 0xffff0000) != 0) {
-        return false;
-      }
-//      else {
-//        printf("h0=%08X e=%08X x=%08X\n", h0, e, x);
-//      }
-    }
-
     d = c;
     t1 += res0 + ((a & b) ^ (a & c) ^ (b & c));
     c = b;
@@ -331,7 +316,6 @@ __device__ bool sha256_msg_compression(AMO_SHA256_CTX *ctx, WORD *m) {
   ctx->state[5] += f;
   ctx->state[6] += g;
   ctx->state[7] += h;
-  return true;
 }
 
 __device__ void sha256_init(AMO_SHA256_CTX *ctx) {

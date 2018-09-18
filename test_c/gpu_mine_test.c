@@ -11,8 +11,8 @@
 FILE *fdebug;
 
 /*********************** FUNCTION DEFINITIONS ***********************/
-void test1(int difficulty, int gdim, int bdim, BYTE data[32]);
-void test2(int gdim, int bdim);
+void test1(int device, int difficulty, int gdim, int bdim, BYTE data[32]);
+void test2(int device, int gdim, int bdim);
 
 void reverse_order(BYTE * h, int len) {
   BYTE a, b;
@@ -46,23 +46,26 @@ int main(int argc, char **argv) {
   sprintf(debugfilename,"debug_test.txt");
   fdebug = fopen(debugfilename,"w");
 
-  int diff, gdim, bdim;
+  int device, diff, gdim, bdim;
   if (argc == 1) {
-	printf("Usage: %s <difficulty> <gdim> <bdim>\n", argv[0]);
+	printf("Usage: %s <device> <difficulty> <gdim> <bdim>\n", argv[0]);
 	return 0;
   }
   if (argc > 1) {
-	diff = (int) strtol(argv[1], (char **)0, 10);
+	device = (int) strtol(argv[1], (char **)0, 10);
   }
   if (argc > 2) {
-	gdim = (int) strtol(argv[2], (char **)0, 10);
+	diff = (int) strtol(argv[2], (char **)0, 10);
   }
   if (argc > 3) {
-	bdim = (int) strtol(argv[3], (char **)0, 10);
+	gdim = (int) strtol(argv[3], (char **)0, 10);
+  }
+  if (argc > 4) {
+	bdim = (int) strtol(argv[4], (char **)0, 10);
   }
 
-  test1(diff, gdim, bdim, hash1);
-//  test2(gdim, bdim);
+  test1(device, diff, gdim, bdim, hash1);
+//  test2(0, gdim, bdim);
 
   return 0;
 }

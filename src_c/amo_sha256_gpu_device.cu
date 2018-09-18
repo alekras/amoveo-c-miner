@@ -188,10 +188,6 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
     r++;
     sha256_init(&ctx);
     sha256_transform(&ctx);
-//    if (!sha256_transform(&ctx)) {
-//      continue;
-//    }
-//
     work = hash2int_w(ctx.state);
     if( work > difficulty) {
       *success = true;
@@ -267,10 +263,9 @@ __device__ __constant__ static const WORD k[64] = {
 
 //SHA-256 functions taken from Brad Conte's implementation
 //https://github.com/B-Con/crypto-algorithms/blob/master/sha256.c
-__device__ bool sha256_transform(AMO_SHA256_CTX *ctx) {
+__device__ void sha256_transform(AMO_SHA256_CTX *ctx) {
   WORD x, res0, res1;
   WORD a, b, c, d, e, f, g, h, i, t1, m[64];
-//  WORD h0;
 
   for (i = 0; i < 16; ++i)
     m[i] = ctx->data[i];
@@ -291,7 +286,6 @@ __device__ bool sha256_transform(AMO_SHA256_CTX *ctx) {
   f = ctx->state[5];
   g = ctx->state[6];
   h = ctx->state[7];
-//  h0 = h = ctx->state[7];
 
   for (i = 0; i < 64; ++i) {
     ep0(a,res0)
@@ -302,12 +296,6 @@ __device__ bool sha256_transform(AMO_SHA256_CTX *ctx) {
     g = f;
     f = e;
     e = d + t1;
-//    if (i == 60) {
-//      if ((e + h0) != 0) {
-//        return false;
-//      }
-//    }
-
     d = c;
     t1 += res0 + ((a & b) ^ (a & c) ^ (b & c));
     c = b;
@@ -323,7 +311,6 @@ __device__ bool sha256_transform(AMO_SHA256_CTX *ctx) {
   ctx->state[5] += f;
   ctx->state[6] += g;
   ctx->state[7] += h;
-  return true;
 }
 
 __device__ void sha256_init(AMO_SHA256_CTX *ctx) {
