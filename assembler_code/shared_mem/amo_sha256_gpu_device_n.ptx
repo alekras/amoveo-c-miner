@@ -36,17 +36,17 @@
 
 	mov.u64 	%rd85, __local_depot0;
 	cvta.local.u64 	%SP, %rd85;
-	ld.param.u64 	%rd33, [_Z13kernel_sha256PhjS_PVbS1_PVljPl_param_0];
-	ld.param.u32 	%r100, [_Z13kernel_sha256PhjS_PVbS1_PVljPl_param_1];
-	ld.param.u64 	%rd30, [_Z13kernel_sha256PhjS_PVbS1_PVljPl_param_2];
-	ld.param.u64 	%rd31, [_Z13kernel_sha256PhjS_PVbS1_PVljPl_param_3];
-	ld.param.u64 	%rd34, [_Z13kernel_sha256PhjS_PVbS1_PVljPl_param_4];
-	ld.param.u64 	%rd32, [_Z13kernel_sha256PhjS_PVbS1_PVljPl_param_5];
-	ld.param.u32 	%r101, [_Z13kernel_sha256PhjS_PVbS1_PVljPl_param_6];
-	ld.param.u64 	%rd35, [_Z13kernel_sha256PhjS_PVbS1_PVljPl_param_7];
+	ld.param.u64 	%rd_<data>, [_Z13kernel_sha256PhjS_PVbS1_PVljPl_param_0]; // data
+	ld.param.u32 	%r100, [_Z13kernel_sha256PhjS_PVbS1_PVljPl_param_1]; // difficulty
+	ld.param.u64 	%rd30, [_Z13kernel_sha256PhjS_PVbS1_PVljPl_param_2]; // nonce
+	ld.param.u64 	%rd31, [_Z13kernel_sha256PhjS_PVbS1_PVljPl_param_3]; // success
+	ld.param.u64 	%rd34, [_Z13kernel_sha256PhjS_PVbS1_PVljPl_param_4]; // stop
+	ld.param.u64 	%rd32, [_Z13kernel_sha256PhjS_PVbS1_PVljPl_param_5]; // cycles
+	ld.param.u32 	%r101, [_Z13kernel_sha256PhjS_PVbS1_PVljPl_param_6]; // device_id
+	ld.param.u64 	%rd35, [_Z13kernel_sha256PhjS_PVbS1_PVljPl_param_7]; //cycles_total
 	cvta.to.global.u64 	%rd1, %rd35;
 	cvta.to.global.u64 	%rd2, %rd34;
-	cvta.to.global.u64 	%rd3, %rd33;
+	cvta.to.global.u64 	%rd3, %rd_<data>;
 	add.u64 	%rd36, %SP, 0;
 	cvta.to.local.u64 	%rd4, %rd36;
 	mov.u32 	%r103, %ntid.x;

@@ -12,7 +12,6 @@
 extern "C" {
   char amoveo_update_gpu(BYTE *nonce, BYTE *data);
   void amoveo_stop_gpu();
-  void amoveo_hash_gpu(BYTE *data, WORD len, BYTE *hash, WORD cycle);
   void amoveo_gpu_alloc_mem(int, int, int);
   void amoveo_gpu_free_mem();
   void amoveo_mine_gpu(BYTE nonce[23],
@@ -112,6 +111,9 @@ int main(int argc, char **argv) {
         amoveo_mine_gpu(nonce, block_diff, bhash, GDIM, BDIM, id);
 //        std::cerr << "PORT: after command= " << command << ".\n\r";
 //        std::cerr.flush();
+        write_32b_integer(std::cout, 1);
+        std::cout.write(reinterpret_cast<char*>(&command), 1);
+        std::cout.flush();
       } else if (command == 'U') {
         success = (char) amoveo_update_gpu(nonce, bhash);
 //        std::cerr << "PORT: after command= " << command << "; success= " << (int)success << ".\n\r";
