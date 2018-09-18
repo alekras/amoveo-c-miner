@@ -1,8 +1,8 @@
 -module(miner_n).
 
 -export([start/0, send_comm_2_port/4]).
--define(Peer, "http://159.65.120.84:8085").%for a mining pool on the server.
--define(CORES, 1).
+-define(Peer, "http://159.65.120.84:8085"). %for a mining pool on the server.
+-define(CORES, 2).
 -define(Pubkey, <<"BGv90RwK8L4OBSbl+6SUuyWSQVdkVDIOJY0i1wpWZINMTIBAM9/z3bOejY/LXm2AtA/Ibx4C7eeTJ+q0vhU9xlA=">>). %% 88 bytes 704 bits
 
 -ifdef(MACOS).
@@ -10,14 +10,12 @@
   -define(TracePeriod_1, 1).%how long to wait in seconds while checking for success in GPU.
   -define(TracePeriod_2, 1).%how long to wait in seconds while checking for changing mining data.
   -define(Pool_sleep_period, 1).%How long to wait in miliseconds if we cannot connect to the mining pool.
-  -define(Miner_sleep, 10). %This is how you reduce the load on CPU. It sleeps this long in miliseconds between mining cycles.
   -define(HTTPC, httpc_mock).
 -else.
   -define(Treshold, 54).%how long to wait in seconds before checking if new mining data is available.
   -define(TracePeriod_1, 2).%how long to wait in seconds while checking for success in GPU.
   -define(TracePeriod_2, 1).%how long to wait in seconds while checking for changing mining data.
   -define(Pool_sleep_period, 1000).%How long to wait in miliseconds if we cannot connect to the mining pool.
-  -define(Miner_sleep, 1000). %This is how you reduce the load on CPU. It sleeps this long in miliseconds between mining cycles.
   -define(HTTPC, httpc).
 -endif.
 
@@ -27,7 +25,7 @@
 start() ->
   io:format("~n~s Started mining.~n~n", [datetime_string()]),
   os:cmd("pkill " ++ atom_to_list(?PORT_NAME)),
-  timer:sleep(?Miner_sleep),
+  timer:sleep(1000),
   Ports = start_many(?CORES),
   start_c_miners(Ports).
 
@@ -55,7 +53,6 @@ flush() ->
 unpack_mining_data(R) ->
   [<<"ok">>, [_, Hash, BlockDiff, ShareDiff]] = mochijson2:decode(R),
   F = base64:decode(Hash),
-%%  io:format("~s ask for work: Hash:~256p Diff:~p / ~p~n", [datetime_string(), F, BlockDiff, ShareDiff]),
   case ?USE_SHARE_POOL of
     true ->
       {F, BlockDiff, ShareDiff};
@@ -73,8 +70,9 @@ start_c_miners(Ports) ->
 start_miner_step(Ports, F, BD, SD, Period) ->
   RS = crypto:strong_rand_bytes(23),
   flush(),
-  [Port ! {self(), {command, <<"I", F/binary, RS/binary, BD:32/integer, SD:32/integer, Core_id:32/integer>>}} || {Core_id, Port} <- Ports],
-%  io:format("~s Sent command 'I'~n", [datetime_string()]),
+  M_pid = self(),
+  [erlang:spawn(?MODULE, send_comm_2_port, [Port, Core_id, <<"I", F/binary, RS/binary, BD:32/integer, SD:32/integer, Core_id:32/integer>>, M_pid]) || {Core_id, Port} <- Ports],
+  wait_for(?CORES),
   run_miners(Ports, F, Period).
 
 send_comm_2_port(Port, Dev_id, <<"I", _, _, _, _, _>> = Msg, M_pid) ->
@@ -154,7 +152,6 @@ run_miners(Ports, Bhash, Period) ->
   wait_for(?CORES),
 
   if Period >= ?Treshold ->
-%    io:format("~s Timeout, ask for work. ~n", [datetime_string()]),
     timer:sleep(?TracePeriod_2 * 1000),
     {F, BD, SD} = ask_for_work(),
     io:format("~s#~2.2.0w ask for work: Hash:~256p Diff:~p / ~p~n", [datetime_string(), Period, F, BD, SD]),
@@ -188,7 +185,6 @@ talk_helper(Data, Peer, N) ->
       timer:sleep(?Pool_sleep_period),
       talk_helper(Data, Peer, N-1);
     {ok, {_, _, R}} ->
-%%      io:format("~s Server responce: ~256p~n", [datetime_string(), R]),
       R;
     _E -> 
       io:fwrite("\nIf you are running a solo-mining node, then this error may have happened because you need to turn on and sync your Amoveo node before you can mine. You can get it here: https://github.com/zack-bitcoin/amoveo \n If this error happens while connected to the public mining node, then it can probably be safely ignored."),
@@ -197,12 +193,7 @@ talk_helper(Data, Peer, N) ->
   end.
 
 check_data(Bhash, Nonce) ->
-%  io:format(">>> check data ~n", []),
-%  io:format("bhash: ~256p~n", [Bhash]),
-%  io:format("nonce: ~256p~n", [Nonce]),
-  Y = <<Bhash/binary, Nonce/binary>>,
-%  io:format("Y: ~256p~n", [Y]),
-  H = hash:doit(Y),
+  H = hash:doit(<<Bhash/binary, Nonce/binary>>),
   I = pow:hash2integer(H, 1),
   J = pow:hash2integer(H, 0),
   io:format("~s check data: ~256p Diff: ~p / ~p~n", [datetime_string(), H, I, J]).
@@ -211,4 +202,4 @@ check_data(Bhash, Nonce) ->
 datetime_string() ->
   {{_Year, Month, Day}, {Hour, Minute, Second}} = calendar:local_time(),
   lists:flatten(io_lib:format("~2.2.0w/~2.2.0w-~2.2.0w:~2.2.0w:~2.2.0w", [Month, Day, Hour, Minute, Second])).
-%%  lists:concat([Month, "/", Day, "-", Hour, ":", Minute, ":", Second]).
+
