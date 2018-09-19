@@ -26,10 +26,16 @@ char amoveo_update_gpu(BYTE *nonce, BYTE *data) {
   fprintf(fdebug,"---- Update: data and nonce \n");
   fflush(fdebug);
   count++;
-  if ((count % 9) == 0) {
-	  return (char)1;
+  if ((count % 5) == 0) {
+    for (int i = 0; i < 23; i++) {
+      nonce[i] = i;
+    }
+    for (int i = 0; i < 32; i++) {
+      data[i] = 31 - i;
+    }
+    return (char)1;
   } else {
-	  return (char)0;
+    return (char)0;
   }
 }
 
