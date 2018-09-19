@@ -4,7 +4,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "sha256.h"
+#include "../src_c/sha256.h"
 
 FILE *fdebug;
 

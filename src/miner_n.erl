@@ -71,12 +71,14 @@ start_miner_step(Ports, F, BD, SD, Period) ->
   RS = crypto:strong_rand_bytes(23),
   flush(),
   M_pid = self(),
-  [erlang:spawn(?MODULE, send_comm_2_port, [Port, Core_id, <<"I", F/binary, RS/binary, BD:32/integer, SD:32/integer, Core_id:32/integer>>, M_pid]) || {Core_id, Port} <- Ports],
+%%  [erlang:spawn(?MODULE, send_comm_2_port, [Port, Core_id, <<"I", F/binary, RS/binary, BD:32/integer, SD:32/integer, Core_id:32/integer>>, M_pid]) || {Core_id, Port} <- Ports],
+  [send_comm_2_port(Port, Core_id, <<"I", F/binary, RS/binary, BD:32/integer, SD:32/integer, Core_id:32/integer>>, M_pid) || {Core_id, Port} <- Ports],
   wait_for(?CORES),
   run_miners(Ports, F, Period).
 
-send_comm_2_port(Port, Dev_id, <<"I", _, _, _, _, _>> = Msg, M_pid) ->
+send_comm_2_port(Port, Dev_id, <<"I", _/binary>> = Msg, M_pid) ->
   Port ! {self(), {command, Msg}},
+  io:format("send comm I to port=~p~n", [Port]),
   receive
     {_Port, {data, <<"I">>}} ->
       M_pid ! {ok, Dev_id};
@@ -87,6 +89,7 @@ send_comm_2_port(Port, Dev_id, <<"I", _, _, _, _, _>> = Msg, M_pid) ->
   end;
 send_comm_2_port(Port, Dev_id, <<"U">> = Msg, M_pid) ->
   Port ! {self(), {command, Msg}},
+  io:format("send comm U to port=~p~n", [Port]),
   receive
     {_Port, {data, <<"U">>}} ->
       M_pid ! {ok, Dev_id};
@@ -121,6 +124,7 @@ send_comm_2_port(Port, Dev_id, <<"U">> = Msg, M_pid) ->
   end;
 send_comm_2_port(Port, Dev_id, <<"S">> = Msg, M_pid) ->
   Port ! {self(), {command, Msg}},
+  io:format("send comm S to port=~p~n", [Port]),
   receive
     {_Port, {data, <<"S">>}} ->
       M_pid ! {ok, Dev_id};
