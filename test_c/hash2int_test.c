@@ -112,7 +112,7 @@ WORD h2i_w_new(WORD h[8]) {
         our_diff += (hi >> 24) & 0xff;
         if ((24 - j) < 0) {
 //          WORD t = ((h[i + 1] >> 1) & 0x7FFFFFFF) >> (55 - j);
-          our_diff += (((h[i + 1] >> 1) & 0x7FFFFFFF) >> (55 - j)));
+          our_diff += (((h[i + 1] >> 1) & 0x7FFFFFFF) >> (55 - j));
 //          printf(" 2) %08X  %08X  %08X\n",h[i], (h[i] << (j - 24)), (((h[i + 1] >> 1) & 0x7FFFFFFF) >> (55 - j)));
         }
         return our_diff;
