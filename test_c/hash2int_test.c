@@ -89,6 +89,39 @@ WORD h2i_w(WORD h[8]) {
   return our_diff;
 }
 
+WORD h2i_w_new(WORD h[8]) {
+  WORD our_diff = 0, hi, mask = 0x80000000;
+
+  for(int i = 0; i < 8; i++) {
+    hi = h[i];
+    for(int j = 0; j < 32; j++) {
+      if ( (hi & mask) == 0 ) {
+        our_diff++;
+//        mask = mask >> 1;
+        hi = hi << 1;
+      } else {
+        our_diff *= 256;
+//        printf(" 0) %d  ", our_diff );
+        if (j == 31) {
+          hi = h[i + 1];
+          j = 0;
+        } else {
+          hi = hi << 1;
+          j++;
+        }
+        our_diff += (hi >> 24) & 0xff;
+        if ((24 - j) < 0) {
+//          WORD t = ((h[i + 1] >> 1) & 0x7FFFFFFF) >> (55 - j);
+          our_diff += (((h[i + 1] >> 1) & 0x7FFFFFFF) >> (55 - j)));
+//          printf(" 2) %08X  %08X  %08X\n",h[i], (h[i] << (j - 24)), (((h[i + 1] >> 1) & 0x7FFFFFFF) >> (55 - j)));
+        }
+        return our_diff;
+      }
+    }
+  }
+  return our_diff;
+}
+
 WORD hash2int(BYTE h[32]) {
   WORD our_diff = 0;
   BYTE diff_flag = 1;
