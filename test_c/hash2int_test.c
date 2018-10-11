@@ -11,11 +11,13 @@
 //(256*number of leading 0 bits) + byte starting with 1.
 WORD h2i(BYTE h[32]) {
   WORD our_diff = 0;
+  BYTE hi, mask = 0x80;
 
   for(int i = 0; i < 31; i++) {
-    BYTE mask = 0x80;
+    mask = 0x80;
+    hi = h[i];
     for(int j = 0; j < 8; j++) {
-      if ( (h[i] & mask) == 0 ) {
+      if ( (hi & mask) == 0 ) {
         our_diff++;
         mask = mask >> 1;
       } else {
@@ -24,9 +26,9 @@ WORD h2i(BYTE h[32]) {
           our_diff += h[i + 1];
         } else {
           j++;
-          our_diff += (((h[i] << j)  & 0xFF) + (h[i + 1] >> (8 - j)));
-          printf(" %08X  %08X\n", h[i], (h[i] << j));
-          printf(" %08X  %08X\n", h[i+1], (((h[i + 1] >> 1) & 0x7F) >> (7 - j)));
+          our_diff += (((hi << j) & 0xFF) + (h[i + 1] >> (8 - j)));
+//          printf(" %08X  %08X\n", h[i], (h[i] << j));
+//          printf(" %08X  %08X\n", h[i+1], (((h[i + 1] >> 1) & 0x7F) >> (7 - j)));
         }
         return our_diff;
       }
@@ -88,38 +90,32 @@ WORD h2i_w(WORD h[8]) {
   }
   return our_diff;
 }
+#define step(hi,hii) \
+  for(int j = 0; j < 32; j++) { \
+    if ( (hi & mask) == 0 ) { \
+      our_diff++; \
+      hi <<= 1; \
+    } else { \
+      our_diff *= 256; \
+      if (j == 31) { \
+        our_diff += hii >> 24; \
+      } else { \
+        our_diff += ((hi << 1) >> 24); \
+        if (j > 23) { our_diff += (hii >> (56 - j)); } \
+      } \
+      goto end; \
+    }}
 
 WORD h2i_w_new(WORD h[8]) {
   WORD our_diff = 0, hi, mask = 0x80000000;
-
-  for(int i = 0; i < 8; i++) {
-    hi = h[i];
-    for(int j = 0; j < 32; j++) {
-      if ( (hi & mask) == 0 ) {
-        our_diff++;
-//        mask = mask >> 1;
-        hi = hi << 1;
-      } else {
-        our_diff *= 256;
-//        printf(" 0) %d  ", our_diff );
-        if (j == 31) {
-          hi = h[i + 1];
-          j = 0;
-        } else {
-          hi = hi << 1;
-          j++;
-        }
-        our_diff += (hi >> 24) & 0xff;
-        if ((24 - j) < 0) {
-//          WORD t = ((h[i + 1] >> 1) & 0x7FFFFFFF) >> (55 - j);
-          our_diff += (((h[i + 1] >> 1) & 0x7FFFFFFF) >> (55 - j));
-//          printf(" 2) %08X  %08X  %08X\n",h[i], (h[i] << (j - 24)), (((h[i + 1] >> 1) & 0x7FFFFFFF) >> (55 - j)));
-        }
-        return our_diff;
-      }
-    }
-  }
-  return our_diff;
+  step(h[0], h[1])
+  step(h[1], h[2])
+  step(h[2], h[3])
+  step(h[3], h[4])
+  step(h[4], h[5])
+  step(h[5], h[6])
+  step(h[6], h[7])
+  end: return our_diff;
 }
 
 WORD hash2int(BYTE h[32]) {
@@ -271,7 +267,9 @@ int diffic_test()
 //  for(int i = 0; i < sizeof(words); i++)  printf("%08X.",words[i]);
 //  printf("\n");
   dfc = h2i_w(words);
-  printf("** h2i_w Difficulty: %d\n", dfc);
+  printf("** h2i_w     Difficulty: %d\n", dfc);
+  dfc = h2i_w_new(words);
+  printf("** h2i_w_new Difficulty: %d\n", dfc);
   printf("\n");
 
   dfc = h2i(hash2);
@@ -287,7 +285,9 @@ int diffic_test()
   dfc = h2i_rvs(hash2);
   printf("Difficulty: %d\n", dfc);
   dfc = h2i_w(words);
-  printf("** h2i_w Difficulty: %d\n", dfc);
+  printf("** h2i_w     Difficulty: %d\n", dfc);
+  dfc = h2i_w_new(words);
+  printf("** h2i_w_new Difficulty: %d\n", dfc);
   printf("\n");
 
   dfc = h2i(hash3);
@@ -303,7 +303,9 @@ int diffic_test()
   dfc = h2i_rvs(hash3);
   printf("Difficulty: %d\n", dfc);
   dfc = h2i_w(words);
-  printf("** h2i_w Difficulty: %d\n", dfc);
+  printf("** h2i_w     Difficulty: %d\n", dfc);
+  dfc = h2i_w_new(words);
+  printf("** h2i_w_new Difficulty: %d\n", dfc);
   printf("\n");
   return dfc;
 }

@@ -39,6 +39,7 @@ inline void gpuAssert(cudaError_t code, char *file, int line, bool abort) {
 #define CUDA_SAFE_CALL(ans) { gpuAssert((ans), (char*)__FILE__, __LINE__, true); }
 #define CUDA_UNSAFE_CALL(ans) { gpuAssert((ans), (char*)__FILE__, __LINE__, false); }
 
+static int deviceId;
 static GPU_thread_info *h_info_debug, *d_info_debug;
 static struct timeval t_start, t_end;
 static long int *h_cycles_total, *d_cycles_total;
@@ -58,8 +59,8 @@ extern "C" bool amoveo_update_gpu(BYTE *nonce, BYTE *data) {
 //  fprintf(stderr,"GPU: >>> Amoveo update *h_stop=%d *h_success=%d\r\n", *h_stop, *h_success);
   bool success_ret = *h_success;
   if (success_ret) {
-    fprintf(stderr,"GPU: !!!!!!!!!! Amoveo update h_success=%d\r\n", *h_success);
-    fprintf(fdebug,"GPU: !!!!!!!!!! Amoveo update h_success=%d\r\n", *h_success);
+//    fprintf(stderr,"GPU: !!!!!!!!!! Amoveo update h_success=%d\r\n", *h_success);
+    fprintf(fdebug,"GPU[%d]: !!!!!!!!!! Amoveo update h_success=%d\r\n", deviceId, *h_success);
 
     *h_stop = true;
 
@@ -72,32 +73,32 @@ extern "C" bool amoveo_update_gpu(BYTE *nonce, BYTE *data) {
 
     amoveo_hash_gpu(text, 55, result, 1);
 
-    fprintf(stderr," Input     : ");
+    fprintf(fdebug," Input      : ");
     for(int i = 0; i < 32; i++)
-        fprintf(stderr,"%d,",text[i]);
-    fprintf(stderr,"\r\n");
-    fprintf(stderr," GPU Data  : ");
+        fprintf(fdebug,"%d,",text[i]);
+    fprintf(fdebug,"\r\n");
+    fprintf(fdebug," GPU Hash   : ");
     for(int i = 0; i < 32; i++)
-        fprintf(stderr,"%d,",h_data[i]);
-    fprintf(stderr,"\r\n");
-    fprintf(stderr," Check     : ");
+        fprintf(fdebug,"%d,",h_data[i]);
+    fprintf(fdebug,"\r\n");
+    fprintf(fdebug," Check Hash : ");
     for(int i = 0; i < 32; i++)
-        fprintf(stderr,"%d,",result[i]);
-    fprintf(stderr,"\r\n");
-    fprintf(stderr," Nonce     : ");
+        fprintf(fdebug,"%d,",result[i]);
+    fprintf(fdebug,"\r\n");
+    fprintf(fdebug," Nonce      : ");
     for(int i = 0; i < 23; i++)
-        fprintf(stderr,"%d,",h_nonce[i]);
-    fprintf(stderr,"\r\n");
+        fprintf(fdebug,"%d,",h_nonce[i]);
+    fprintf(fdebug,"\r\n");
     int d = hash_2_int(result);
-    fprintf(stderr,"Difficulty: %d.", hash_2_int(result));
-    fprintf(stderr,"\r\n");
-    fflush(stderr);
+    fprintf(fdebug,"Difficulty: current=%d,  calculated=%d.", saved_difficulty, d);
+    fprintf(fdebug,"\r\n");
+    fflush(fdebug);
 
     memcpy(nonce, h_nonce, 23 * sizeof(BYTE));
     memcpy(data, h_data, 32 * sizeof(BYTE));
-    if (d < saved_difficulty) {
-      success_ret = false;
-    }
+//    if (d < saved_difficulty) {
+//      success_ret = false;
+//    }
     *h_success = false;
   }
 
@@ -136,14 +137,14 @@ extern "C" void amoveo_stop_gpu() {
   fprintf(fdebug,"Cycles = %ld, (max=%ld, min=%ld, zero=%ld) Hash rate = %0.2f MH/s  took time = %0.1f secs\r\n",
       total, max_cycles, min_cycles, zero_cycles, numHashes/(1000000.0 * total_elapsed), total_elapsed);
 //  fprintf(fdebug,"Cycles = %d  Hash rate = %0.2f MH/s  took time = %0.1f secs\r\n", *h_cycles, numHashes/(1000000.0*total_elapsed), total_elapsed);
-  fprintf(fdebug,"Nonce   : ");
-  for(int i = 0; i < 23; i++)
-      fprintf(fdebug,"%02X.",h_nonce[i]);
-  fprintf(fdebug,"\n");
-  fprintf(fdebug,"Data    : ");
-  for(int i = 0; i < 32; i++)
-      fprintf(fdebug,"%02X.",h_data[i]);
-  fprintf(fdebug,"\n\n");
+//  fprintf(fdebug,"Nonce   : ");
+//  for(int i = 0; i < 23; i++)
+//      fprintf(fdebug,"%02X.",h_nonce[i]);
+//  fprintf(fdebug,"\n");
+//  fprintf(fdebug,"Data    : ");
+//  for(int i = 0; i < 32; i++)
+//      fprintf(fdebug,"%02X.",h_data[i]);
+//  fprintf(fdebug,"\n\n");
 //  for (int i = 0; i < 2048; i++) {
 //    fprintf(fdebug, "[fl:%d, blk.idx:[%d, %d], thr.idx:[%d, %d]]\n", h_info_debug[i].flag, h_info_debug[i].blockIdx, h_info_debug[i].blockIdy, h_info_debug[i].threadIdx, h_info_debug[i].threadIdy);
 //  }
@@ -187,8 +188,8 @@ extern "C" void gpu_info(int device) {
   cudaDeviceProp prop;
   CUDA_SAFE_CALL( cudaGetDeviceProperties(&prop, device) );
   fprintf(fdebug," -- name = %s\n", prop.name);
-  fprintf(fdebug," -- totalGlobalMem = %d is the total amount of global memory available on the device in bytes.\n", prop.totalGlobalMem);
-  fprintf(fdebug," -- totalConstMem = %d is the total amount of constant memory available on the device in bytes.\n", prop.totalConstMem);
+  fprintf(fdebug," -- totalGlobalMem = %ld is the total amount of global memory available on the device in bytes.\n", prop.totalGlobalMem);
+  fprintf(fdebug," -- totalConstMem = %ld is the total amount of constant memory available on the device in bytes.\n", prop.totalConstMem);
 
   fprintf(fdebug," -- multiProcessor Count = %d\n", prop.multiProcessorCount);
   fprintf(fdebug," -- maxThreadsPerMultiProcessor is the number of maximum resident threads per multiprocessor = %d\n", prop.maxThreadsPerMultiProcessor);
@@ -198,8 +199,8 @@ extern "C" void gpu_info(int device) {
   fprintf(fdebug," -- regsPerMultiprocessor = %d is the maximum number of 32-bit registers available to a multiprocessor;\n", prop.regsPerMultiprocessor);
   fprintf(fdebug,"    this number is shared by all thread blocks simultaneously resident on a multiprocessor\n");
 
-  fprintf(fdebug," -- clockRate = %d is the clock frequency in kilohertz.\n", prop.clockRate);
-  fprintf(fdebug," -- memoryClockRate = %d is the peak memory clock frequency in kilohertz.\n", prop.memoryClockRate);
+  fprintf(fdebug," -- clockRate = %ld is the clock frequency in kilohertz.\n", prop.clockRate);
+  fprintf(fdebug," -- memoryClockRate = %ld is the peak memory clock frequency in kilohertz.\n", prop.memoryClockRate);
   fprintf(fdebug," -- major = %d, minor = %d are the major and minor revision numbers defining the device's compute capability.\n", prop.major, prop.minor);
   fprintf(fdebug," -- computeMode = %d is the compute mode that the device is currently in.\n", prop.computeMode);
 
@@ -217,6 +218,7 @@ extern "C" void gpu_info(int device) {
 }
 
 extern "C" void amoveo_gpu_alloc_mem(int device, int gdim, int bdim) {
+  deviceId = device;
   CUDA_SAFE_CALL( cudaSetDevice(device) );
   CUDA_SAFE_CALL( cudaSetDeviceFlags(cudaDeviceMapHost) );
   CUDA_SAFE_CALL( cudaHostAlloc((void **)&h_data, 32 * sizeof(BYTE), cudaHostAllocMapped) );
@@ -280,11 +282,13 @@ extern "C" void amoveo_mine_gpu(BYTE nonce[23],
 
 WORD hash_2_int(BYTE h[32]) {
   WORD our_diff = 0;
+  BYTE hi, mask = 0x80;
 
   for(int i = 0; i < 31; i++) {
-    BYTE mask = 0x80;
+    mask = 0x80;
+    hi = h[i];
     for(int j = 0; j < 8; j++) {
-      if ( (h[i] & mask) == 0 ) {
+      if ( (hi & mask) == 0 ) {
         our_diff++;
         mask = mask >> 1;
       } else {
@@ -293,8 +297,7 @@ WORD hash_2_int(BYTE h[32]) {
           our_diff += h[i + 1];
         } else {
           j++;
-//          our_diff += (((h[i] << j)  & 0xFF) + (h[i + 1] >> (8 - j)));
-          our_diff += (((h[i] << j)  & 0xFF) + (((h[i + 1] >> 1) & 0x7F) >> (7 - j)));
+          our_diff += (((hi << j) & 0xFF) + (h[i + 1] >> (8 - j)));
         }
         return our_diff;
       }
@@ -320,8 +323,8 @@ extern "C" void test1(int device, int difficulty, int gdim, int bdim, BYTE data[
     gettimeofday(&t_start, NULL);
     h_nonce[0] = (BYTE)t_start.tv_usec;
     h_nonce[22] = (BYTE)(t_start.tv_usec >> 8);
-    kernel_sha256<<<gdim, bdim, (bdim * 64 * sizeof(WORD))>>>(d_data, difficulty, d_nonce, d_success, d_stop, d_cycles, 0, d_cycles_total);
-//    kernel_sha256<<<gdim, bdim>>>(d_data, difficulty, d_nonce, d_success, d_stop, d_cycles, 0, d_cycles_total);
+//    kernel_sha256<<<gdim, bdim, (bdim * 64 * sizeof(WORD))>>>(d_data, difficulty, d_nonce, d_success, d_stop, d_cycles, device, d_cycles_total);
+    kernel_sha256<<<gdim, bdim>>>(d_data, difficulty, d_nonce, d_success, d_stop, d_cycles, device, d_cycles_total);
 
     m++;
     n = 0;

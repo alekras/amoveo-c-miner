@@ -12,7 +12,7 @@
   -define(Pool_sleep_period, 1).%How long to wait in miliseconds if we cannot connect to the mining pool.
   -define(HTTPC, httpc_mock).
 -else.
-  -define(Treshold, 54).%how long to wait in seconds before checking if new mining data is available.
+  -define(Treshold, 56).%how long to wait in seconds before checking if new mining data is available.
   -define(TracePeriod_1, 2).%how long to wait in seconds while checking for success in GPU.
   -define(TracePeriod_2, 1).%how long to wait in seconds while checking for changing mining data.
   -define(Pool_sleep_period, 1000).%How long to wait in miliseconds if we cannot connect to the mining pool.
@@ -23,7 +23,8 @@
 -define(USE_SHARE_POOL, true).
 
 start() ->
-  io:format("~n~s Let start mining.~n~n", [datetime_string()]),
+  lager:start(),
+  lager:notice("  Let start mining.", []),
   os:cmd("pkill " ++ atom_to_list(?PORT_NAME)),
   timer:sleep(1000),
   Ports = start_many(?CORES),
@@ -44,7 +45,7 @@ ask_for_work() ->
       false -> {F, ShareDiff, ShareDiff}
     end
   catch _:_ ->
-    io:format("Server wrong response : ~128p~n", [R]),
+    lager:debug("Server wrong response : ~128p~n", [R]),
     timer:sleep(1000),
     ask_for_work()
   end.
@@ -58,7 +59,7 @@ flush() ->
 
 start_c_miners(Ports) ->
   {F, BD, SD} = ask_for_work(),
-  io:format("~s ASK for work: Hash:~256p Diff:~p / ~p~n", [datetime_string(), F, BD, SD]),
+  lager:debug(" ASK for work: Hash:~256p Diff:~p / ~p~n", [F, BD, SD]),
   start_miner_step(Ports, F, BD, SD, ?Treshold),
   start().
 
@@ -84,17 +85,17 @@ wait_for(Command, N) ->
           [_ | L] -> L;
           L -> L
         catch E:Reason ->
-          io:format(" ---- Unexpected response from server: ~128p~nError: ~p : ~p~n", [RR, E, Reason]),
+          lager:debug(" ---- Unexpected response from server: ~128p~nError: ~p : ~p~n", [RR, E, Reason]),
           RR
         end,
-      io:format("~s {~p} !!!!! Found a block. Nonce ~128p. Response from server: ~128p~n", [datetime_string(), _Port, BinNonce, LL]),
-      check_data(_Hash, Nonce),
+      lager:info("{~p} !!!!! Found a block. Nonce ~128p. Response from server: ~128p~n", [_Port, BinNonce, LL]),
+%%      check_data(_Hash, Nonce),
       wait_for(Command, N - 1);
     Err -> 
-      io:format(" ~s Command: ~p. Err from port: ~p", [datetime_string(), Command, Err]),
+      lager:debug(" Command: ~p. Err from port: ~p", [Command, Err]),
       wait_for(Command, N - 1)
   after 1000 ->
-      io:format(" ~s port timeout after command: ~p~n", [datetime_string()], Command),
+      lager:debug(" port timeout after command: ~p~n", [Command]),
       wait_for(Command, N - 1)
   end.
 
@@ -106,7 +107,7 @@ run_miners(Ports, Bhash, Period) ->
   if Period >= ?Treshold ->
     timer:sleep(?TracePeriod_2 * 1000),
     {F, BD, SD} = ask_for_work(),
-    io:format("~s#~2.2.0w ask for work: Hash:~256p Diff:~p / ~p~n", [datetime_string(), Period, F, BD, SD]),
+    lager:debug("#~2.2.0w ask for work: Hash:~256p Diff:~p / ~p~n", [Period, F, BD, SD]),
     if F =:= Bhash ->
       run_miners(Ports, Bhash, Period + ?TracePeriod_2);
     true ->
@@ -137,13 +138,13 @@ talk_helper(_Data, _Peer, 0) -> []; %%throw("talk helper failed");
 talk_helper(Data, Peer, N) ->
   case talk_helper2(Data, Peer) of
     {ok, {_Status, _Headers, []}} ->
-      io:fwrite("server ~p gave confusing response: ~p; ~p.\n", [Peer, _Status, _Headers]),
+      lager:debug("server ~p gave confusing response: ~p; ~p.\n", [Peer, _Status, _Headers]),
       timer:sleep(?Pool_sleep_period),
       talk_helper(Data, Peer, N-1);
     {ok, {_, _, R}} ->
       R;
     _E -> 
-      io:fwrite("\nIf you are running a solo-mining node, then this error may have happened because you need to turn on and sync your Amoveo node before you can mine. You can get it here: https://github.com/zack-bitcoin/amoveo \n If this error happens while connected to the public mining node, then it can probably be safely ignored."),
+      lager:debug("\nIf you are running a solo-mining node, then this error may have happened because you need to turn on and sync your Amoveo node before you can mine. You can get it here: https://github.com/zack-bitcoin/amoveo \n If this error happens while connected to the public mining node, then it can probably be safely ignored."),
       timer:sleep(?Pool_sleep_period),
       talk_helper(Data, Peer, N-1)
   end.
@@ -152,10 +153,9 @@ check_data(Bhash, Nonce) ->
   H = hash:doit(<<Bhash/binary, Nonce/binary>>),
   I = pow:hash2integer(H, 1),
   J = pow:hash2integer(H, 0),
-  io:format("~s check data: ~256p Diff: ~p / ~p~n", [datetime_string(), H, I, J]).
+  lager:info(" check data: ~256p Diff: ~p / ~p~n", [H, I, J]).
 
-  
-datetime_string() ->
-  {{_Year, Month, Day}, {Hour, Minute, Second}} = calendar:local_time(),
-  lists:flatten(io_lib:format(" ~2.2.0w/~2.2.0w-~2.2.0w:~2.2.0w:~2.2.0w ", [Month, Day, Hour, Minute, Second])).
+%% datetime_string() ->
+%%   {{_Year, Month, Day}, {Hour, Minute, Second}} = calendar:local_time(),
+%%   lists:flatten(io_lib:format(" ~2.2.0w/~2.2.0w-~2.2.0w:~2.2.0w:~2.2.0w ", [Month, Day, Hour, Minute, Second])).
 

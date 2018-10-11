@@ -89,8 +89,8 @@ int main(int argc, char **argv) {
 // read packet length, 4 bytes
       len = read_32b_integer(std::cin);
       std::cin.read(reinterpret_cast<char*>(&command), 1);
-      std::cerr << "PORT: command= " << command << ".\n\r";
-      std::cerr.flush();
+//      std::cerr << "PORT: command= " << command << ".\n\r";
+//      std::cerr.flush();
 //      fprintf(fdebug,"PORT: fprintf() %d\n", command);
 //      fflush(fdebug);
 
