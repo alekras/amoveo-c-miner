@@ -124,7 +124,7 @@ extern "C" {
       if (j == 31) { \
         our_diff += hii >> 24; \
       } else { \
-        our_diff += ((hi << 1) >> 24); \
+        our_diff += (hi >> 23) & 0xff; \
         if (j > 23) { our_diff += (hii >> (56 - j)); } \
       } \
       goto end; \
@@ -195,7 +195,7 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
   }
 
   r = 0;
-  int index = 99; //(int)(idx % 100);
+  int index = 9; //(int)(idx % 100);
   while (true) {
     if ((r % 100) == index) {
       if (*stop) {

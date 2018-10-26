@@ -90,9 +90,24 @@ WORD h2i_w(WORD h[8]) {
   }
   return our_diff;
 }
+#define step0(hi,hii) \
+  for(int j = 31; j >= 0; j--) { \
+    if ( (hi >> j) == 0 ) { \
+      our_diff++; \
+    } else { \
+      our_diff *= 256; \
+      if (j == 0) { \
+        our_diff += hii & 0xff; \
+      } else { \
+        if (j >= 8) {our_diff += (hi >> (j-8)) & 0xff;} \
+        else { our_diff += hi - (1 << j) + (hii >> (24 + j)) & 0xff; } \
+      } \
+      goto end; \
+    }}
+
 #define step(hi,hii) \
-  for(int j = 0; j < 32; j++) { \
-    if ( (hi & mask) == 0 ) { \
+  for (int j = 0; j < 32; j++) { \
+    if ( (hi & 0x80000000) == 0 ) { \
       our_diff++; \
       hi <<= 1; \
     } else { \
@@ -100,14 +115,14 @@ WORD h2i_w(WORD h[8]) {
       if (j == 31) { \
         our_diff += hii >> 24; \
       } else { \
-        our_diff += ((hi << 1) >> 24); \
+        our_diff += (hi >> 23) & 0xff; \
         if (j > 23) { our_diff += (hii >> (56 - j)); } \
       } \
       goto end; \
     }}
 
 WORD h2i_w_new(WORD h[8]) {
-  WORD our_diff = 0, hi, mask = 0x80000000;
+  WORD our_diff = 0;
   step(h[0], h[1])
   step(h[1], h[2])
   step(h[2], h[3])
