@@ -43,11 +43,11 @@
 
 	mov.u64 	%rd83, __local_depot0;
 	cvta.local.u64 	%SP, %rd83;
-	ld.param.u64 	%rd39, [_Z13kernel_sha256PhjS_PVbS1_PVljPl_param_0];
-	ld.param.u64 	%rd36, [_Z13kernel_sha256PhjS_PVbS1_PVljPl_param_2];
-	ld.param.u64 	%rd37, [_Z13kernel_sha256PhjS_PVbS1_PVljPl_param_3];
-	ld.param.u64 	%rd40, [_Z13kernel_sha256PhjS_PVbS1_PVljPl_param_4];
-	ld.param.u32 	%r119, [_Z13kernel_sha256PhjS_PVbS1_PVljPl_param_6];
+	ld.param.u64 	%rd39, [_Z13kernel_sha256PhjS_PVbS1_PVljPl_param_0]; // data
+	ld.param.u64 	%rd36, [_Z13kernel_sha256PhjS_PVbS1_PVljPl_param_2]; // nonce
+	ld.param.u64 	%rd37, [_Z13kernel_sha256PhjS_PVbS1_PVljPl_param_3]; // success
+	ld.param.u64 	%rd40, [_Z13kernel_sha256PhjS_PVbS1_PVljPl_param_4]; // stop
+	ld.param.u32 	%r119, [_Z13kernel_sha256PhjS_PVbS1_PVljPl_param_6]; // device id
 	cvta.to.global.u64 	%rd2, %rd40;
 	cvta.to.global.u64 	%rd3, %rd39;
 	add.u64 	%rd42, %SP, 0;
@@ -56,23 +56,23 @@
 	mov.u32 	%r122, %ctaid.x;
 	mov.u32 	%r123, %tid.x;
 	mad.lo.s32 	%r1, %r121, %r122, %r123;
-	mov.u32 	%r709, -8;
-	mov.u64 	%rd74, %rd3;
-	mov.u64 	%rd75, %rd4;
+	mov.u32 	%r709, -8; // counter
+	mov.u64 	%rd74, %rd3;  // pointer to data[j] j = 0
+	mov.u64 	%rd75, %rd4;  // pointer to ctx_data[i] i = 0
 
 BB0_1:
-	.pragma "nounroll";
+	.pragma "nounroll"; // rd74 -> j, rd75 -> i
 	ld.global.u8 	%r124, [%rd74];
-	shl.b32 	%r125, %r124, 24;
+	shl.b32 	%r125, %r124, 24;      // data[j] << 24
 	ld.global.u8 	%r126, [%rd74+1];
-	shl.b32 	%r127, %r126, 16;
-	or.b32  	%r128, %r127, %r125;
+	shl.b32 	%r127, %r126, 16;      // data[j + 1] << 16
+	or.b32  	%r128, %r127, %r125;   // (data[j] << 24) | (data[j + 1] << 16)
 	ld.global.u8 	%rs3, [%rd74+2];
-	mul.wide.u16 	%r129, %rs3, 256;
+	mul.wide.u16 	%r129, %rs3, 256;  // (data[j + 2] << 8)
 	or.b32  	%r130, %r128, %r129;
 	ld.global.u8 	%r131, [%rd74+3];
 	or.b32  	%r132, %r130, %r131;
-	st.local.u32 	[%rd75], %r132;
+	st.local.u32 	[%rd75], %r132;    // ctx_data[i] =
 	add.s64 	%rd75, %rd75, 4;
 	add.s64 	%rd74, %rd74, 4;
 	add.s32 	%r709, %r709, 1;
@@ -83,55 +83,56 @@ BB0_1:
 	cvta.to.global.u64 	%rd11, %rd36;
 	add.u64 	%rd44, %SP, 112;
 	cvta.to.local.u64 	%rd12, %rd44;
-	mov.u64 	%rd77, -8;
-	mov.u32 	%r710, -5;
-	mov.u64 	%rd76, %rd11;
+	mov.u64 	%rd77, -8;  // i -?
+	mov.u32 	%r710, -5; counter
+	mov.u64 	%rd76, %rd11; // pointer to nonce[j] j = 0
 
 BB0_3:
-	.pragma "nounroll";
+	.pragma "nounroll"; // 
 	ld.global.u8 	%r134, [%rd76];
-	shl.b32 	%r135, %r134, 24;
+	shl.b32 	%r135, %r134, 24;      // (nonce[j] << 24)
 	ld.global.u8 	%r136, [%rd76+1];
-	shl.b32 	%r137, %r136, 16;
+	shl.b32 	%r137, %r136, 16;      // (nonce[j + 1] << 16)
 	or.b32  	%r138, %r137, %r135;
 	ld.global.u8 	%rs4, [%rd76+2];
-	mul.wide.u16 	%r139, %rs4, 256;
+	mul.wide.u16 	%r139, %rs4, 256;  // (nonce[j + 2] << 8)
 	or.b32  	%r140, %r138, %r139;
 	ld.global.u8 	%r141, [%rd76+3];
-	or.b32  	%r142, %r140, %r141;
+	or.b32  	%r142, %r140, %r141;   //  
 	shl.b64 	%rd46, %rd77, 2;
-	sub.s64 	%rd47, %rd4, %rd46;
-	st.local.u32 	[%rd47], %r142;
-	add.s64 	%rd77, %rd77, -1;
-	add.s64 	%rd76, %rd76, 4;
-	add.s32 	%r710, %r710, 1;
+	sub.s64 	%rd47, %rd4, %rd46;    // pointer to stx_data - (-8 * 4)
+	st.local.u32 	[%rd47], %r142;    // stx_data[i] =
+	add.s64 	%rd77, %rd77, -1;      // i = i - 1
+	add.s64 	%rd76, %rd76, 4;       // j = j + 4
+	add.s32 	%r710, %r710, 1;       // counter++
 	setp.ne.s32	%p2, %r710, 0;
 	@%p2 bra 	BB0_3;
 
 	ld.global.u8 	%r175, [%rd11+20];
-	shl.b32 	%r176, %r175, 24;
+	shl.b32 	%r176, %r175, 24;      // (nonce[20] << 24)
 	ld.global.u8 	%r177, [%rd11+21];
-	shl.b32 	%r178, %r177, 16;
+	shl.b32 	%r178, %r177, 16;      // (nonce[21] << 16)
 	ld.global.u8 	%rs5, [%rd11+22];
-	mul.wide.u16 	%r179, %rs5, 256;
+	mul.wide.u16 	%r179, %rs5, 256;  // (nonce[22] << 8)
 	or.b32  	%r180, %r176, %r178;
 	or.b32  	%r181, %r180, %r179;
 	or.b32  	%r182, %r181, 128;
-	st.local.u32 	[%rd4+52], %r182;
+	st.local.u32 	[%rd4+52], %r182; // ctx_data[13] = 
 	mov.u32 	%r146, 0;
-	st.local.u32 	[%rd4+56], %r146;
+	st.local.u32 	[%rd4+56], %r146; // ctx_data[14] =
 	mov.u32 	%r150, 440;
-	st.local.u32 	[%rd4+60], %r150;
+	st.local.u32 	[%rd4+60], %r150; // ctx_data[15] =
 	ld.local.u32 	%r183, [%rd4+40];
 	xor.b32  	%r172, %r183, %r1;
 	ld.local.u32 	%r184, [%rd4+44];
-	ld.local.u32 	%r170, [%rd4+36];
+	ld.local.u32 	%r170, [%rd4+36]; = ctx_data[9]
 	ld.local.u32 	%r185, [%rd4];
-	st.local.u32 	[%rd4+40], %r172;
+	st.local.u32 	[%rd4+40], %r172;  // ctx_data[10] =
 	xor.b32  	%r174, %r184, %r119;
-	st.local.u32 	[%rd4+44], %r174;
-	ld.local.u32 	%r144, [%rd4+4];
-	// inline asm
+	st.local.u32 	[%rd4+44], %r174; // ctx_data[11] =
+	ld.local.u32 	%r144, [%rd4+4];  //  = ctx_data[1]
+************************** i = 16 *********************************
+	// inline asm sig0(ctx_data[i - 15], res0) :: i = 16
 	{
 	 .reg .u32 t1;
 	 .reg .u32 t2;
@@ -142,7 +143,7 @@ BB0_3:
 	 xor.b32            %r143, t1, t2;
 	}
 	// inline asm
-	// inline asm
+	// inline asm sig1(ctx_data[i - 2], res1)
 	{
 	 .reg .u32 t1;
 	 .reg .u32 t2;
@@ -153,12 +154,13 @@ BB0_3:
 	 xor.b32            %r145, t1, t2;
 	}
 	// inline asm
-	add.s32 	%r186, %r145, %r143;
-	add.s32 	%r187, %r186, %r170;
-	add.s32 	%r154, %r187, %r185;
-	st.local.u32 	[%rd4+64], %r154;
-	ld.local.u32 	%r148, [%rd4+8];
-	// inline asm
+	add.s32 	%r186, %r145, %r143; = res1 + res0
+	add.s32 	%r187, %r186, %r170; =  + ctx_data[9]
+	add.s32 	%r154, %r187, %r185; =  + ctx_data[0]
+	st.local.u32 	[%rd4+64], %r154;  // ctx_data[16] = 
+	ld.local.u32 	%r148, [%rd4+8]; = ctx_data[2]
+************************** i = 17 *********************************
+	// inline asm  sig0(ctx_data[i - 15], res0)
 	{
 	 .reg .u32 t1;
 	 .reg .u32 t2;
@@ -169,7 +171,7 @@ BB0_3:
 	 xor.b32            %r147, t1, t2;
 	}
 	// inline asm
-	// inline asm
+	// inline asm  sig1(ctx_data[i - 2], res1)
 	{
 	 .reg .u32 t1;
 	 .reg .u32 t2;
@@ -185,6 +187,7 @@ BB0_3:
 	add.s32 	%r158, %r189, %r144;
 	st.local.u32 	[%rd4+68], %r158;
 	ld.local.u32 	%r152, [%rd4+12];
+************************** i = 18 *********************************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -213,6 +216,7 @@ BB0_3:
 	ld.local.u32 	%r192, [%rd4+48];
 	st.local.u32 	[%rd4+72], %r162;
 	ld.local.u32 	%r156, [%rd4+16];
+************************** i = 19 *********************************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -240,6 +244,7 @@ BB0_3:
 	add.s32 	%r195, %r194, %r152;
 	st.local.u32 	[%rd4+76], %r195;
 	ld.local.u32 	%r160, [%rd4+20];
+************************** i = 20 *********************************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -267,6 +272,7 @@ BB0_3:
 	add.s32 	%r198, %r197, %r156;
 	st.local.u32 	[%rd4+80], %r198;
 	ld.local.u32 	%r164, [%rd4+24];
+************************** i = 21 *********************************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -281,6 +287,7 @@ BB0_3:
 	add.s32 	%r199, %r163, %r160;
 	st.local.u32 	[%rd4+84], %r199;
 	ld.local.u32 	%r166, [%rd4+28];
+************************** i = 22 *********************************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -296,6 +303,7 @@ BB0_3:
 	add.s32 	%r201, %r200, 440;
 	st.local.u32 	[%rd4+88], %r201;
 	ld.local.u32 	%r168, [%rd4+32];
+************************** i = 23 *********************************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -310,6 +318,7 @@ BB0_3:
 	add.s32 	%r202, %r154, %r167;
 	add.s32 	%r203, %r202, %r166;
 	st.local.u32 	[%rd4+92], %r203;
+************************** i = 24 *********************************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -324,6 +333,7 @@ BB0_3:
 	add.s32 	%r204, %r158, %r169;
 	add.s32 	%r205, %r204, %r168;
 	st.local.u32 	[%rd4+96], %r205;
+************************** i = 25 *********************************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -338,6 +348,7 @@ BB0_3:
 	add.s32 	%r206, %r162, %r171;
 	add.s32 	%r207, %r206, %r170;
 	st.local.u32 	[%rd4+100], %r207;
+************************** i = 26 *********************************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -351,29 +362,29 @@ BB0_3:
 	// inline asm
 	add.s32 	%r208, %r195, %r173;
 	add.s32 	%r209, %r208, %r172;
-	st.local.u32 	[%rd4+104], %r209;
-	mov.u64 	%rd78, 0;
+	st.local.u32 	[%rd4+104], %r209;     // ctx_data[26] = 
+	mov.u64 	%rd78, 0;                  // r = 0
 	bra.uni 	BB0_5;
 
 BB0_10:
-	ld.local.u32 	%r210, [%rd4+48];
-	add.s32 	%r6, %r210, 1;
-	ld.local.u32 	%r712, [%rd4+52];
-	st.local.u32 	[%rd4+48], %r6;
+	ld.local.u32 	%r210, [%rd4+48];      // ctx_data[12]
+	add.s32 	%r6, %r210, 1;             // ++ctx_data[12]
+	ld.local.u32 	%r712, [%rd4+52];      // ctx_data[13]
+	st.local.u32 	[%rd4+48], %r6;        // ctx_data[12]
 	setp.eq.s32	%p6, %r6, 0;
 	@%p6 bra 	BB0_12;
 	bra.uni 	BB0_11;
 
 BB0_12:
 	add.s32 	%r712, %r712, 16;
-	st.local.u32 	[%rd4+52], %r712;
-	ld.local.u32 	%r211, [%rd4+80];
+	st.local.u32 	[%rd4+52], %r712;      // stx_data[13]
+	ld.local.u32 	%r211, [%rd4+80];      // stx_data[20]
 	add.s32 	%r711, %r211, 16;
-	st.local.u32 	[%rd4+80], %r711;
+	st.local.u32 	[%rd4+80], %r711;      // stx_data[20]
 	bra.uni 	BB0_13;
 
 BB0_11:
-	ld.local.u32 	%r711, [%rd4+80];
+	ld.local.u32 	%r711, [%rd4+80];      // stx_data[20]
 
 BB0_13:
 	mov.u32 	%r715, 0;
@@ -397,21 +408,22 @@ BB0_13:
 	ld.local.u32 	%r245, [%rd4+68];
 	ld.local.u32 	%r241, [%rd4+64];
 	add.s32 	%r253, %r381, 1;
-	st.local.u32 	[%rd4+76], %r253;
+	st.local.u32 	[%rd4+76], %r253;   // ctx_data[19]++
 	add.s32 	%r394, %r382, 1;
-	st.local.u32 	[%rd4+104], %r394;
-	st.local.v4.u32 	[%rd12], {%r713, %r385, %r384, %r383};
-	st.local.v4.u32 	[%rd12+16], {%r389, %r388, %r387, %r386};
-	st.local.v4.u32 	[%rd12+32], {%r393, %r392, %r391, %r390};
-	add.s32 	%r700, %r210, 1;
-	st.local.v4.u32 	[%rd12+48], {%r700, %r712, %r233, %r237};
-	st.local.v4.u32 	[%rd12+64], {%r241, %r245, %r249, %r253};
-	st.local.u32 	[%rd12+80], %r711;
-	ld.local.u32 	%r395, [%rd4+84];
-	ld.local.u32 	%r396, [%rd4+88];
-	ld.local.u32 	%r397, [%rd4+92];
-	ld.local.u32 	%r398, [%rd4+96];
-	ld.local.u32 	%r399, [%rd4+100];
+	st.local.u32 	[%rd4+104], %r394;  // ctx_data[26]++
+	st.local.v4.u32 	[%rd12], {%r713, %r385, %r384, %r383};    // m[0..3] =
+	st.local.v4.u32 	[%rd12+16], {%r389, %r388, %r387, %r386}; // m[4..7] =
+	st.local.v4.u32 	[%rd12+32], {%r393, %r392, %r391, %r390}; // m[8..11] =
+	add.s32 	%r700, %r210, 1;                                  // ctx_data[12] = calculate again
+	st.local.v4.u32 	[%rd12+48], {%r700, %r712, %r233, %r237};  // m[12..15] =
+	st.local.v4.u32 	[%rd12+64], {%r241, %r245, %r249, %r253};  // m[16..19]
+	st.local.u32 	[%rd12+80], %r711; // m[20] = 
+	ld.local.u32 	%r395, [%rd4+84];  // ctx_data[21]
+	ld.local.u32 	%r396, [%rd4+88];  // ctx_data[22]
+	ld.local.u32 	%r397, [%rd4+92];  // ctx_data[23]
+	ld.local.u32 	%r398, [%rd4+96];  // ctx_data[24]
+	ld.local.u32 	%r399, [%rd4+100]; // ctx_data[25]
+****************************** i = 21, m[19]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -424,7 +436,8 @@ BB0_13:
 	}
 	// inline asm
 	add.s32 	%r261, %r395, %r212;
-	st.local.u32 	[%rd12+84], %r261;
+	st.local.u32 	[%rd12+84], %r261; // m[21] =
+****************************** i = 22, m[20]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -437,7 +450,8 @@ BB0_13:
 	}
 	// inline asm
 	add.s32 	%r265, %r396, %r214;
-	st.local.u32 	[%rd12+88], %r265;
+	st.local.u32 	[%rd12+88], %r265; // m[22] =
+****************************** i = 23, m[21]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -450,7 +464,8 @@ BB0_13:
 	}
 	// inline asm
 	add.s32 	%r269, %r397, %r216;
-	st.local.u32 	[%rd12+92], %r269;
+	st.local.u32 	[%rd12+92], %r269; // m[23] = 
+****************************** i = 24, m[22]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -463,7 +478,8 @@ BB0_13:
 	}
 	// inline asm
 	add.s32 	%r273, %r398, %r218;
-	st.local.u32 	[%rd12+96], %r273;
+	st.local.u32 	[%rd12+96], %r273;  // m[24] = 
+****************************** i = 25, m[23]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -476,7 +492,8 @@ BB0_13:
 	}
 	// inline asm
 	add.s32 	%r277, %r399, %r220;
-	st.local.u32 	[%rd12+100], %r277;
+	st.local.u32 	[%rd12+100], %r277;  // m[25] = 
+****************************** i = 26, m[24]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -489,7 +506,8 @@ BB0_13:
 	}
 	// inline asm
 	add.s32 	%r281, %r394, %r222;
-	st.local.u32 	[%rd12+104], %r281;
+	st.local.u32 	[%rd12+104], %r281;  // m[26] =
+****************************** i = 27, m[12] & m[25]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -516,6 +534,7 @@ BB0_13:
 	add.s32 	%r401, %r400, %r711;
 	add.s32 	%r285, %r401, %r390;
 	st.local.u32 	[%rd12+108], %r285;
+****************************** i = 28, m[13] & m[26]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -542,6 +561,7 @@ BB0_13:
 	add.s32 	%r403, %r402, %r261;
 	add.s32 	%r289, %r403, %r6;
 	st.local.u32 	[%rd12+112], %r289;
+****************************** i = 29, m[14] & m[27]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -568,6 +588,7 @@ BB0_13:
 	add.s32 	%r405, %r404, %r265;
 	add.s32 	%r293, %r405, %r712;
 	st.local.u32 	[%rd12+116], %r293;
+****************************** i = 30, m[15] & m[28]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -594,6 +615,7 @@ BB0_13:
 	add.s32 	%r407, %r406, %r269;
 	add.s32 	%r297, %r407, %r233;
 	st.local.u32 	[%rd12+120], %r297;
+****************************** i = 31, m[16] & m[29]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -620,6 +642,7 @@ BB0_13:
 	add.s32 	%r409, %r408, %r273;
 	add.s32 	%r301, %r409, %r237;
 	st.local.u32 	[%rd12+124], %r301;
+****************************** i = 32, m[17] & m[30]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -646,6 +669,7 @@ BB0_13:
 	add.s32 	%r411, %r410, %r277;
 	add.s32 	%r305, %r411, %r241;
 	st.local.u32 	[%rd12+128], %r305;
+****************************** i = 33, m[18] & m[31]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -672,6 +696,7 @@ BB0_13:
 	add.s32 	%r413, %r412, %r281;
 	add.s32 	%r309, %r413, %r245;
 	st.local.u32 	[%rd12+132], %r309;
+****************************** i = 34, m[19] & m[32]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -698,6 +723,7 @@ BB0_13:
 	add.s32 	%r415, %r414, %r285;
 	add.s32 	%r313, %r415, %r249;
 	st.local.u32 	[%rd12+136], %r313;
+****************************** i = 35, m[20] & m[33]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -724,6 +750,7 @@ BB0_13:
 	add.s32 	%r417, %r416, %r289;
 	add.s32 	%r317, %r417, %r253;
 	st.local.u32 	[%rd12+140], %r317;
+****************************** i = 36, m[21] & m[34]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -750,6 +777,7 @@ BB0_13:
 	add.s32 	%r419, %r418, %r293;
 	add.s32 	%r321, %r419, %r711;
 	st.local.u32 	[%rd12+144], %r321;
+****************************** i = 37, m[22] & m[35]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -776,6 +804,7 @@ BB0_13:
 	add.s32 	%r421, %r420, %r297;
 	add.s32 	%r325, %r421, %r261;
 	st.local.u32 	[%rd12+148], %r325;
+****************************** i = 38, m[23] & m[36]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -802,6 +831,7 @@ BB0_13:
 	add.s32 	%r423, %r422, %r301;
 	add.s32 	%r329, %r423, %r265;
 	st.local.u32 	[%rd12+152], %r329;
+****************************** i = 39, m[24] & m[37]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -828,6 +858,7 @@ BB0_13:
 	add.s32 	%r425, %r424, %r305;
 	add.s32 	%r333, %r425, %r269;
 	st.local.u32 	[%rd12+156], %r333;
+****************************** i = 40, m[25] & m[38]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -854,6 +885,7 @@ BB0_13:
 	add.s32 	%r427, %r426, %r309;
 	add.s32 	%r337, %r427, %r273;
 	st.local.u32 	[%rd12+160], %r337;
+****************************** i = 41, m[26] & m[39]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -880,6 +912,7 @@ BB0_13:
 	add.s32 	%r429, %r428, %r313;
 	add.s32 	%r341, %r429, %r277;
 	st.local.u32 	[%rd12+164], %r341;
+****************************** i = 42, m[27] & m[40]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -906,6 +939,7 @@ BB0_13:
 	add.s32 	%r431, %r430, %r317;
 	add.s32 	%r345, %r431, %r281;
 	st.local.u32 	[%rd12+168], %r345;
+****************************** i = 43, m[28] & m[41]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -932,6 +966,7 @@ BB0_13:
 	add.s32 	%r433, %r432, %r321;
 	add.s32 	%r349, %r433, %r285;
 	st.local.u32 	[%rd12+172], %r349;
+****************************** i = 44, m[29] & m[42]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -958,6 +993,7 @@ BB0_13:
 	add.s32 	%r435, %r434, %r325;
 	add.s32 	%r353, %r435, %r289;
 	st.local.u32 	[%rd12+176], %r353;
+****************************** i = 45, m[30] & m[43]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -984,6 +1020,7 @@ BB0_13:
 	add.s32 	%r437, %r436, %r329;
 	add.s32 	%r357, %r437, %r293;
 	st.local.u32 	[%rd12+180], %r357;
+****************************** i = 46, m[31] & m[44]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -1010,6 +1047,7 @@ BB0_13:
 	add.s32 	%r439, %r438, %r333;
 	add.s32 	%r361, %r439, %r297;
 	st.local.u32 	[%rd12+184], %r361;
+****************************** i = 47, m[32] & m[45]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -1036,6 +1074,7 @@ BB0_13:
 	add.s32 	%r441, %r440, %r337;
 	add.s32 	%r365, %r441, %r301;
 	st.local.u32 	[%rd12+188], %r365;
+****************************** i = 48, m[33] & m[46]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -1062,6 +1101,7 @@ BB0_13:
 	add.s32 	%r443, %r442, %r341;
 	add.s32 	%r369, %r443, %r305;
 	st.local.u32 	[%rd12+192], %r369;
+****************************** i = 49, m[34] & m[47]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -1088,6 +1128,7 @@ BB0_13:
 	add.s32 	%r445, %r444, %r345;
 	add.s32 	%r323, %r445, %r309;
 	st.local.u32 	[%rd12+196], %r323;
+****************************** i = 50, m[35] & m[48]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -1114,6 +1155,7 @@ BB0_13:
 	add.s32 	%r447, %r446, %r349;
 	add.s32 	%r327, %r447, %r313;
 	st.local.u32 	[%rd12+200], %r327;
+****************************** i = 51, m[36] & m[49]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -1140,6 +1182,7 @@ BB0_13:
 	add.s32 	%r449, %r448, %r353;
 	add.s32 	%r331, %r449, %r317;
 	st.local.u32 	[%rd12+204], %r331;
+****************************** i = 52, m[37] & m[50]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -1166,6 +1209,7 @@ BB0_13:
 	add.s32 	%r451, %r450, %r357;
 	add.s32 	%r335, %r451, %r321;
 	st.local.u32 	[%rd12+208], %r335;
+****************************** i = 53, m[38] & m[51]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -1187,6 +1231,7 @@ BB0_13:
 	 shr.u32            t2, %r331, 10;
 	 xor.b32            %r330, t1, t2;
 	}
+****************************** i = 54, m[39] & m[52]  *********************
 	// inline asm
 	add.s32 	%r452, %r330, %r328;
 	add.s32 	%r453, %r452, %r361;
@@ -1218,6 +1263,7 @@ BB0_13:
 	add.s32 	%r455, %r454, %r365;
 	add.s32 	%r343, %r455, %r329;
 	st.local.u32 	[%rd12+216], %r343;
+****************************** i = 55, m[40] & m[53]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -1244,6 +1290,7 @@ BB0_13:
 	add.s32 	%r457, %r456, %r369;
 	add.s32 	%r347, %r457, %r333;
 	st.local.u32 	[%rd12+220], %r347;
+****************************** i = 56, m[41] & m[54]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -1270,6 +1317,7 @@ BB0_13:
 	add.s32 	%r459, %r458, %r323;
 	add.s32 	%r351, %r459, %r337;
 	st.local.u32 	[%rd12+224], %r351;
+****************************** i = 57, m[42] & m[55]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -1296,6 +1344,7 @@ BB0_13:
 	add.s32 	%r461, %r460, %r327;
 	add.s32 	%r355, %r461, %r341;
 	st.local.u32 	[%rd12+228], %r355;
+****************************** i = 58, m[43] & m[56]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -1322,6 +1371,7 @@ BB0_13:
 	add.s32 	%r463, %r462, %r331;
 	add.s32 	%r359, %r463, %r345;
 	st.local.u32 	[%rd12+232], %r359;
+****************************** i = 59, m[44] & m[57]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -1348,6 +1398,7 @@ BB0_13:
 	add.s32 	%r465, %r464, %r335;
 	add.s32 	%r363, %r465, %r349;
 	st.local.u32 	[%rd12+236], %r363;
+****************************** i = 60, m[45] & m[58]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -1374,6 +1425,7 @@ BB0_13:
 	add.s32 	%r467, %r466, %r339;
 	add.s32 	%r367, %r467, %r353;
 	st.local.u32 	[%rd12+240], %r367;
+****************************** i = 61, m[46] & m[59]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -1400,6 +1452,7 @@ BB0_13:
 	add.s32 	%r469, %r468, %r343;
 	add.s32 	%r371, %r469, %r357;
 	st.local.u32 	[%rd12+244], %r371;
+****************************** i = 62, m[47] & m[60]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -1426,6 +1479,7 @@ BB0_13:
 	add.s32 	%r471, %r470, %r347;
 	add.s32 	%r472, %r471, %r361;
 	st.local.u32 	[%rd12+248], %r472;
+****************************** i = 63, m[48] & m[61]  *********************
 	// inline asm
 	{
 	 .reg .u32 t1;
@@ -1452,69 +1506,71 @@ BB0_13:
 	add.s32 	%r474, %r473, %r351;
 	add.s32 	%r475, %r474, %r365;
 	st.local.u32 	[%rd12+252], %r475;
-	mov.u32 	%r722, -1694144372;
-	mov.u32 	%r721, 1359893119;
-	mov.u32 	%r720, -1521486534;
-	mov.u32 	%r719, 1013904242;
-	mov.u32 	%r718, -1150833019;
-	mov.u32 	%r717, 1779033703;
-	mov.u32 	%r716, 528734635;
-	mov.u32 	%r714, 1541459225;
+
+	mov.u32 	%ff, -1694144372;
+	mov.u32 	%ee, 1359893119;
+	mov.u32 	%dd, -1521486534;
+	mov.u32 	%cc, 1013904242;
+	mov.u32 	%bb, -1150833019;
+	mov.u32 	%aa, 1779033703;
+	mov.u32 	%gg, 528734635;
+	mov.u32 	%hh, 1541459225;
 	bra.uni 	BB0_14;
 
 BB0_15:
-	ld.local.u32 	%r713, [%rd26+12];
+	ld.local.u32 	%r713, [%rd26+12];  // rd26 = ???
 
 BB0_14:
-	// inline asm
+============================= i = 0  ============================
+	// inline asm ep0
 	{
 	 .reg .u32 t1;
 	 .reg .u32 t2;
-	 shf.r.clamp.b32    t1, %r717, %r717, 2;
-	 shf.r.clamp.b32    t2, %r717, %r717, 13;
+	 shf.r.clamp.b32    t1, %aa, %aa, 2;
+	 shf.r.clamp.b32    t2, %aa, %aa, 13;
 	 xor.b32            t1, t1, t2;
-	 shf.r.clamp.b32    t2, %r717, %r717, 22;
+	 shf.r.clamp.b32    t2, %aa, %aa, 22;
 	 xor.b32            %r476, t1, t2;
 	}
 	// inline asm
-	// inline asm
+	// inline asm ep1
 	{
 	 .reg .u32 t1;
 	 .reg .u32 t2;
-	 shf.r.clamp.b32    t1, %r721, %r721, 6;
-	 shf.r.clamp.b32    t2, %r721, %r721, 11;
+	 shf.r.clamp.b32    t1, %ee, %ee, 6;
+	 shf.r.clamp.b32    t2, %ee, %ee, 11;
 	 xor.b32            t1, t1, t2;
-	 shf.r.clamp.b32    t2, %r721, %r721, 25;
+	 shf.r.clamp.b32    t2, %ee, %ee, 25;
 	 xor.b32            %r478, t1, t2;
 	}
 	// inline asm
-	not.b32 	%r492, %r721;
-	and.b32  	%r493, %r716, %r492;
-	and.b32  	%r494, %r721, %r722;
-	xor.b32  	%r495, %r493, %r494;
-	mul.wide.u32 	%rd59, %r715, 4;
+	not.b32 	%r492, %ee;
+	and.b32  	%r493, %gg, %r492; // = (~e & g)
+	and.b32  	%r494, %ee, %ff;   // = (e & f)
+	xor.b32  	%r495, %r493, %r494;  // = ((e & f) ^ (~e & g))
+	mul.wide.u32 	%rd59, %r715, 4;  // r715 -> i; rd59 -> 4*i
 	mov.u64 	%rd60, k;
-	add.s64 	%rd61, %rd60, %rd59;
-	add.s32 	%r496, %r495, %r714;
-	add.s32 	%r497, %r496, %r478;
-	ld.const.u32 	%r498, [%rd61];
-	add.s32 	%r499, %r497, %r498;
-	add.s32 	%r500, %r499, %r713;
-	add.s32 	%r714, %r500, %r720;
-	xor.b32  	%r501, %r718, %r719;
-	and.b32  	%r502, %r717, %r501;
-	and.b32  	%r503, %r718, %r719;
-	xor.b32  	%r504, %r502, %r503;
-	add.s32 	%r505, %r476, %r504;
-	add.s32 	%r720, %r505, %r500;
+	add.s64 	%rd61, %rd60, %rd59;  //rd61 -> &k + 4*i
+	add.s32 	%r496, %r495, %hh;    // = h + ((e & f) ^ (~e & g)) 
+	add.s32 	%r497, %r496, %r478;  // = h + res1 + ((e & f) ^ (~e & g))
+	ld.const.u32 	%r498, [%rd61];   // k[4*i]
+	add.s32 	%r499, %r497, %r498;  // h + res1 + ((e & f) ^ (~e & g)) + k[i]
+	add.s32 	%r500, %r499, %r713;  // t1 = h + res1 + ((e & f) ^ (~e & g)) + k[i] + m[i]
+	add.s32 	%hh, %r500, %dd;
+	xor.b32  	%r501, %bb, %cc;     // = (b ^ c)
+	and.b32  	%r502, %aa, %r501;   // = a & (b ^ c)
+	and.b32  	%r503, %bb, %cc;     // = (b & c)
+	xor.b32  	%r504, %r502, %r503; // = (a & (b ^ c)) ^ (b & c)
+	add.s32 	%r505, %r476, %r504; // = res0 + ((a & b) ^ (a & c) ^ (b & c))
+	add.s32 	%dd, %r505, %r500;   // t1 += ...
 	// inline asm
 	{
 	 .reg .u32 t1;
 	 .reg .u32 t2;
-	 shf.r.clamp.b32    t1, %r720, %r720, 2;
-	 shf.r.clamp.b32    t2, %r720, %r720, 13;
+	 shf.r.clamp.b32    t1, %dd, %dd, 2;
+	 shf.r.clamp.b32    t2, %dd, %dd, 13;
 	 xor.b32            t1, t1, t2;
-	 shf.r.clamp.b32    t2, %r720, %r720, 22;
+	 shf.r.clamp.b32    t2, %dd, %dd, 22;
 	 xor.b32            %r480, t1, t2;
 	}
 	// inline asm
@@ -1522,41 +1578,41 @@ BB0_14:
 	{
 	 .reg .u32 t1;
 	 .reg .u32 t2;
-	 shf.r.clamp.b32    t1, %r714, %r714, 6;
-	 shf.r.clamp.b32    t2, %r714, %r714, 11;
+	 shf.r.clamp.b32    t1, %hh, %hh, 6;
+	 shf.r.clamp.b32    t2, %hh, %hh, 11;
 	 xor.b32            t1, t1, t2;
-	 shf.r.clamp.b32    t2, %r714, %r714, 25;
+	 shf.r.clamp.b32    t2, %hh, %hh, 25;
 	 xor.b32            %r482, t1, t2;
 	}
 	// inline asm
-	and.b32  	%r506, %r714, %r721;
-	not.b32 	%r507, %r714;
-	and.b32  	%r508, %r722, %r507;
+	and.b32  	%r506, %hh, %ee;
+	not.b32 	%r507, %hh;
+	and.b32  	%r508, %ff, %r507;
 	xor.b32  	%r509, %r508, %r506;
 	add.s32 	%r510, %r715, 1;
 	mul.wide.u32 	%rd62, %r510, 4;
 	add.s64 	%rd26, %rd12, %rd62;
-	add.s32 	%r511, %r509, %r716;
+	add.s32 	%r511, %r509, %gg;
 	add.s32 	%r512, %r511, %r482;
 	ld.const.u32 	%r513, [%rd61+4];
 	add.s32 	%r514, %r512, %r513;
 	ld.local.u32 	%r515, [%rd26];
 	add.s32 	%r516, %r514, %r515;
-	add.s32 	%r716, %r516, %r719;
-	xor.b32  	%r517, %r717, %r718;
-	and.b32  	%r518, %r720, %r517;
-	and.b32  	%r519, %r717, %r718;
+	add.s32 	%gg, %r516, %cc;
+	xor.b32  	%r517, %aa, %bb;
+	and.b32  	%r518, %dd, %r517;
+	and.b32  	%r519, %aa, %bb;
 	xor.b32  	%r520, %r518, %r519;
 	add.s32 	%r521, %r480, %r520;
-	add.s32 	%r719, %r521, %r516;
+	add.s32 	%cc, %r521, %r516;
 	// inline asm
 	{
 	 .reg .u32 t1;
 	 .reg .u32 t2;
-	 shf.r.clamp.b32    t1, %r719, %r719, 2;
-	 shf.r.clamp.b32    t2, %r719, %r719, 13;
+	 shf.r.clamp.b32    t1, %cc, %cc, 2;
+	 shf.r.clamp.b32    t2, %cc, %cc, 13;
 	 xor.b32            t1, t1, t2;
-	 shf.r.clamp.b32    t2, %r719, %r719, 22;
+	 shf.r.clamp.b32    t2, %cc, %cc, 22;
 	 xor.b32            %r484, t1, t2;
 	}
 	// inline asm
@@ -1564,38 +1620,38 @@ BB0_14:
 	{
 	 .reg .u32 t1;
 	 .reg .u32 t2;
-	 shf.r.clamp.b32    t1, %r716, %r716, 6;
-	 shf.r.clamp.b32    t2, %r716, %r716, 11;
+	 shf.r.clamp.b32    t1, %gg, %gg, 6;
+	 shf.r.clamp.b32    t2, %gg, %gg, 11;
 	 xor.b32            t1, t1, t2;
-	 shf.r.clamp.b32    t2, %r716, %r716, 25;
+	 shf.r.clamp.b32    t2, %gg, %gg, 25;
 	 xor.b32            %r486, t1, t2;
 	}
 	// inline asm
-	and.b32  	%r522, %r716, %r714;
-	not.b32 	%r523, %r716;
-	and.b32  	%r524, %r721, %r523;
+	and.b32  	%r522, %gg, %hh;
+	not.b32 	%r523, %gg;
+	and.b32  	%r524, %ee, %r523;
 	xor.b32  	%r525, %r524, %r522;
-	add.s32 	%r526, %r525, %r722;
+	add.s32 	%r526, %r525, %ff;
 	add.s32 	%r527, %r526, %r486;
 	ld.const.u32 	%r528, [%rd61+8];
 	add.s32 	%r529, %r527, %r528;
 	ld.local.v2.u32 	{%r530, %r531}, [%rd26+4];
 	add.s32 	%r533, %r529, %r530;
-	add.s32 	%r722, %r533, %r718;
-	xor.b32  	%r534, %r720, %r717;
-	and.b32  	%r535, %r719, %r534;
-	and.b32  	%r536, %r720, %r717;
+	add.s32 	%ff, %r533, %bb;
+	xor.b32  	%r534, %dd, %aa;
+	and.b32  	%r535, %cc, %r534;
+	and.b32  	%r536, %dd, %aa;
 	xor.b32  	%r537, %r535, %r536;
 	add.s32 	%r538, %r484, %r537;
-	add.s32 	%r718, %r538, %r533;
+	add.s32 	%bb, %r538, %r533;
 	// inline asm
 	{
 	 .reg .u32 t1;
 	 .reg .u32 t2;
-	 shf.r.clamp.b32    t1, %r718, %r718, 2;
-	 shf.r.clamp.b32    t2, %r718, %r718, 13;
+	 shf.r.clamp.b32    t1, %bb, %bb, 2;
+	 shf.r.clamp.b32    t2, %bb, %bb, 13;
 	 xor.b32            t1, t1, t2;
-	 shf.r.clamp.b32    t2, %r718, %r718, 22;
+	 shf.r.clamp.b32    t2, %bb, %bb, 22;
 	 xor.b32            %r488, t1, t2;
 	}
 	// inline asm
@@ -1603,29 +1659,29 @@ BB0_14:
 	{
 	 .reg .u32 t1;
 	 .reg .u32 t2;
-	 shf.r.clamp.b32    t1, %r722, %r722, 6;
-	 shf.r.clamp.b32    t2, %r722, %r722, 11;
+	 shf.r.clamp.b32    t1, %ff, %ff, 6;
+	 shf.r.clamp.b32    t2, %ff, %ff, 11;
 	 xor.b32            t1, t1, t2;
-	 shf.r.clamp.b32    t2, %r722, %r722, 25;
+	 shf.r.clamp.b32    t2, %ff, %ff, 25;
 	 xor.b32            %r490, t1, t2;
 	}
 	// inline asm
-	and.b32  	%r539, %r722, %r716;
-	not.b32 	%r540, %r722;
-	and.b32  	%r541, %r714, %r540;
+	and.b32  	%r539, %ff, %gg;
+	not.b32 	%r540, %ff;
+	and.b32  	%r541, %hh, %r540;
 	xor.b32  	%r542, %r541, %r539;
-	add.s32 	%r543, %r542, %r721;
+	add.s32 	%r543, %r542, %ee;
 	add.s32 	%r544, %r543, %r490;
 	ld.const.u32 	%r545, [%rd61+12];
 	add.s32 	%r546, %r544, %r545;
 	add.s32 	%r548, %r546, %r531;
-	add.s32 	%r721, %r548, %r717;
-	xor.b32  	%r549, %r719, %r720;
-	and.b32  	%r550, %r718, %r549;
-	and.b32  	%r551, %r719, %r720;
+	add.s32 	%ee, %r548, %aa;
+	xor.b32  	%r549, %cc, %dd;
+	and.b32  	%r550, %bb, %r549;
+	and.b32  	%r551, %cc, %dd;
 	xor.b32  	%r552, %r550, %r551;
 	add.s32 	%r553, %r488, %r552;
-	add.s32 	%r717, %r553, %r548;
+	add.s32 	%aa, %r553, %r548;
 	add.s32 	%r715, %r715, 4;
 	setp.eq.s32	%p7, %r715, 64;
 	@%p7 bra 	BB0_16;
@@ -1633,10 +1689,10 @@ BB0_14:
 
 BB0_16:
 	add.s64 	%rd78, %rd78, 1;
-	add.s32 	%r34, %r718, -1150833019;
-	add.s32 	%r35, %r719, 1013904242;
-	add.s32 	%r36, %r720, -1521486534;
-	setp.ne.s32	%p8, %r717, -1779033703;
+	add.s32 	%r34, %bb, -1150833019;
+	add.s32 	%r35, %cc, 1013904242;
+	add.s32 	%r36, %dd, -1521486534;
+	setp.ne.s32	%p8, %aa, -1779033703;
 	@%p8 bra 	BB0_5;
 
 	mov.u32 	%r725, 0;
@@ -2067,9 +2123,9 @@ BB0_88:
 	mov.u16 	%rs7, 1;
 	st.volatile.global.u8 	[%rd10], %rs7;
 	st.volatile.global.u8 	[%rd2], %rs7;
-	add.s32 	%r110, %r714, 1541459225;
-	add.s32 	%r111, %r716, 528734635;
-	add.s32 	%r112, %r722, -1694144372;
+	add.s32 	%r110, %hh, 1541459225;
+	add.s32 	%r111, %gg, 528734635;
+	add.s32 	%r112, %ff, -1694144372;
 	mov.u32 	%r730, 0;
 	mov.u64 	%rd79, %rd11;
 
@@ -2097,9 +2153,9 @@ BB0_90:
 	st.global.u8 	[%rd11+21], %rs17;
 	st.global.u8 	[%rd11+22], %rs21;
 	mov.u32 	%r699, 0;
-	add.s32 	%r701, %r718, -1150833019;
+	add.s32 	%r701, %bb, -1150833019;
 	st.local.v4.u32 	[%rd82], {%r699, %r701, %r35, %r36};
-	add.s32 	%r702, %r721, 1359893119;
+	add.s32 	%r702, %ee, 1359893119;
 	st.local.v4.u32 	[%rd82+16], {%r702, %r112, %r111, %r110};
 	mov.u16 	%rs27, 0;
 	mov.u32 	%r731, 4;
