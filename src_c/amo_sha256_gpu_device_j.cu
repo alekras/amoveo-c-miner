@@ -63,6 +63,50 @@ extern "C" {
       "}" \
     : "=r"(res) : "r" (x));
 
+/*  Macros sig0_1 is doing:
+    res = (x >> 7) | (x << 25);
+    res ^= (x >>18) | (x << 14);
+    res ^= (x >> 3);
+ assembler commands:
+1. temp reg t1,
+2. temp reg t2,
+3. t1 = x >> 7
+4. t2 = x >> 18
+5. t1 = t1 ^ t2
+6. t2 = x >> 3
+7. res = t1 ^ t2
+  Macros sig1 is doing:
+    res = (x >> 17) | (x << 15);
+    res ^= (x >> 19) | (x << 13);
+    res ^= (x >> 10);
+ assembler commands:
+1. temp reg t1,
+2. temp reg t2,
+3. t1 = x >> 17
+4. t2 = x >> 19
+5. t1 = t1 ^ t2
+6. t2 = x >> 10
+7. res = t1 ^ t2
+ */
+#define sig0_1(x,y,res) \
+  asm("{\n\t" \
+      " .reg .u32 t1;\n\t" \
+      " .reg .u32 t2;\n\t" \
+      " .reg .u32 t3;\n\t" \
+      " shf.r.clamp.b32    t1, %1, %1, 7;\n\t" \
+      " shf.r.clamp.b32    t2, %1, %1, 18;\n\t" \
+      " xor.b32            t1, t1, t2;\n\t" \
+      " shr.u32            t2, %1, 3;\n\t" \
+      " xor.b32            t3, t1, t2;\n\t" \
+      " shf.r.clamp.b32    t1, %2, %2, 17;\n\t" \
+      " shf.r.clamp.b32    t2, %2, %2, 19;\n\t" \
+      " xor.b32            t1, t1, t2;\n\t" \
+      " shr.u32            t2, %2, 10;\n\t" \
+      " xor.b32            t1, t1, t2;\n\t" \
+      " add.s32            %0, t3, t1;\n\t" \
+      "}" \
+    : "=r"(res) : "r"(x), "r"(y));
+
 /*  Macros ep0 is doing:
     res = (x >> 2) | (x << 30);
     res ^= (x >> 13) | (x << 19);
@@ -183,11 +227,14 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
   ctx_data[11] = ctx_data[11] ^ device_id;
 // extended data - constants:
 
+#pragma unroll 1
   for (int i = 16 ; i < 21; ++i) {
-    sig0(ctx_data[i - 15], res0)
-    sig1(ctx_data[i - 2], res1)
-    ctx_data[i] = res1 + ctx_data[i - 7] + res0 + ctx_data[i - 16];
+//    sig0(ctx_data[i - 15], res0)
+//    sig1(ctx_data[i - 2], res1)
+    sig0_1(ctx_data[i - 15], ctx_data[i - 2], res0)
+    ctx_data[i] = ctx_data[i - 7] + res0 + ctx_data[i - 16];
   }
+#pragma unroll 1
   for (int i = 21 ; i < 27; ++i) {
     sig0(ctx_data[i - 15], res0)
 //    sig1(ctx_data[i - 2], res1)
@@ -229,10 +276,10 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
       }
     //#pragma unroll 1
       for (i = 27 ; i < 64; ++i) {
-        sig0(m[i - 15], res0)
-        sig1(m[i - 2], res1)
-
-        m[i] = res1 + m[i - 7] + res0 + m[i - 16];
+//        sig0(m[i - 15], res0)
+//        sig1(m[i - 2], res1)
+        sig0_1(ctx_data[i - 15], ctx_data[i - 2], res0)
+        m[i] = m[i - 7] + res0 + m[i - 16];
       }
 
       a = a0;
@@ -328,118 +375,3 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
   }
 }
 
-//__device__ WORD hash2int_w() {
-//  WORD our_diff = 0, hi, mask = 0x80000000;
-//  step(a, b)
-//  step(b, c)
-//  step(c, d)
-//  step(d, e)
-//  step(e, f)
-//  step(f, g)
-//  step(g, h)
-//  return our_diff;
-//}
-//__device__ WORD hash2int_w(WORD h[8]) {
-//  WORD our_diff = 0, mask;
-//
-//  for(int i = 0; i < 8; i++) {
-//    mask = 0x80000000;
-//    for(int j = 0; j < 32; j++) {
-//      if ( (h[i] & mask) == 0 ) {
-//        our_diff++;
-//        mask = mask >> 1;
-//      } else {
-//        our_diff *= 256;
-//        if (j == 31) {
-//          j = 0;
-//          i++;
-//        } else {
-//          j++;
-//        }
-//        if ((24 - j) >= 0) {
-//          our_diff += (h[i] >> (24 -j)) & 0xff;
-//        } else {
-//          our_diff += ((h[i] << (j - 24)) + (((h[i + 1] >> 1) & 0x7FFFFFFF) >> (55 - j)));
-//        }
-//        return our_diff;
-//      }
-//    }
-//  }
-//  return our_diff;
-//}
-
-//SHA-256 functions taken from Brad Conte's implementation
-//https://github.com/B-Con/crypto-algorithms/blob/master/sha256.c
-//__device__ void sha256_transform(WORD *ctx_data, WORD *ctx_state) {
-//  WORD i, res0, res1;
-//  WORD m[64];
-//  WORD a, b, c, d, e, f, g, h, t1;
-//
-////#pragma unroll 1
-//  for (i = 0; i < 27; ++i)
-//    m[i] = ctx_data[i];
-//
-//  for (int i = 21 ; i < 27; ++i) {
-////    sig0(ctx_data[i - 15], res0)
-//    sig1(m[i - 2], res1)
-//    m[i] += res1;
-//  }
-////#pragma unroll 1
-//  for (i = 27 ; i < 64; ++i) {
-//    sig0(m[i - 15], res0)
-//    sig1(m[i - 2], res1)
-//
-//    m[i] = res1 + m[i - 7] + res0 + m[i - 16];
-//  }
-////}
-////
-////__device__ void sha256_msg_compression(AMO_SHA256_CTX *ctx, WORD *m) {
-////  WORD res0, res1;
-////  WORD a, b, c, d, e, f, g, h, i, t1;
-//
-//  a = ctx_state[0] = 0x6a09e667;
-//  b = ctx_state[1] = 0xbb67ae85;
-//  c = ctx_state[2] = 0x3c6ef372;
-//  d = ctx_state[3] = 0xa54ff53a;
-//  e = ctx_state[4] = 0x510e527f;
-//  f = ctx_state[5] = 0x9b05688c;
-//  g = ctx_state[6] = 0x1f83d9ab;
-//  h = ctx_state[7] = 0x5be0cd19;
-//
-////#pragma unroll 1
-//  for (i = 0; i < 64; i++) {
-//    ep0(a,res0)
-//    ep1(e,res1)
-//
-//    t1 = h + res1 + ((e & f) ^ (~e & g)) + k[i] + m[i];
-//    h = g;
-//    g = f;
-//    f = e;
-//    e = d + t1;
-//    d = c;
-//    t1 += res0 + ((a & b) ^ (a & c) ^ (b & c));
-//    c = b;
-//    b = a;
-//    a = t1;
-//  }
-//
-//  ctx_state[0] += a;
-//  ctx_state[1] += b;
-//  ctx_state[2] += c;
-//  ctx_state[3] += d;
-//  ctx_state[4] += e;
-//  ctx_state[5] += f;
-//  ctx_state[6] += g;
-//  ctx_state[7] += h;
-//}
-
-//__device__ void sha256_init(WORD *ctx_state) {
-//  ctx_state[0] = 0x6a09e667;
-//  ctx_state[1] = 0xbb67ae85;
-//  ctx_state[2] = 0x3c6ef372;
-//  ctx_state[3] = 0xa54ff53a;
-//  ctx_state[4] = 0x510e527f;
-//  ctx_state[5] = 0x9b05688c;
-//  ctx_state[6] = 0x1f83d9ab;
-//  ctx_state[7] = 0x5be0cd19;
-//}
