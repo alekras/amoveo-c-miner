@@ -154,6 +154,25 @@ extern "C" {
         "}" \
         : "=r"(res) : "r" (x));
 
+#define epp(a,b,c,d,e,f,g,h,km) \
+    asm("{\n\t" \
+        " .reg .u32 t1;\n\t" \
+        " .reg .u32 t2;\n\t" \
+        " .reg .u32 res0;\n\t" \
+        " .reg .u32 res1;\n\t" \
+        " shf.r.clamp.b32    t1, %0, %0, 2;\n\t" \
+        " shf.r.clamp.b32    t2, %0, %0, 13;\n\t" \
+        " xor.b32            t1, t1, t2;\n\t" \
+        " shf.r.clamp.b32    t2, %0, %0, 22;\n\t" \
+        " xor.b32            res0, t1, t2;\n\t" \
+        " shf.r.clamp.b32    t1, %4, %4, 6;\n\t" \
+        " shf.r.clamp.b32    t2, %4, %4, 11;\n\t" \
+        " xor.b32            t1, t1, t2;\n\t" \
+        " shf.r.clamp.b32    t2, %4, %4, 25;\n\t" \
+        " xor.b32            res1, t1, t2;\n\t" \
+        "}" \
+        : "+r"(a), "+r"(b), "+r"(c), "+r"(d), "+r"(e), "+r"(f), "+r"(g), "+r"(h) : "r" (km));
+
 #define step(h0,h1) \
   hi = h0; hii = h1; \
   for (int j = 0; j < 32; j++) { \
