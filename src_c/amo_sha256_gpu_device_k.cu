@@ -152,12 +152,13 @@ extern "C" {
         " shf.r.clamp.b32    t2, %1, %1, 25;\n\t" \
         " xor.b32            %0, t1, t2;\n\t" \
         "}" \
-        : "=r"(res) : "r" (x));
+        : "=r"(res) : "r"(x));
 
 #define epp(a,b,c,d,e,f,g,h,km) \
     asm("{\n\t" \
         " .reg .u32 t1;\n\t" \
         " .reg .u32 t2;\n\t" \
+        " .reg .u32 t3;\n\t" \
         " .reg .u32 res0;\n\t" \
         " .reg .u32 res1;\n\t" \
         " shf.r.clamp.b32    t1, %0, %0, 2;\n\t" \
@@ -165,13 +166,36 @@ extern "C" {
         " xor.b32            t1, t1, t2;\n\t" \
         " shf.r.clamp.b32    t2, %0, %0, 22;\n\t" \
         " xor.b32            res0, t1, t2;\n\t" \
+ \
         " shf.r.clamp.b32    t1, %4, %4, 6;\n\t" \
         " shf.r.clamp.b32    t2, %4, %4, 11;\n\t" \
         " xor.b32            t1, t1, t2;\n\t" \
         " shf.r.clamp.b32    t2, %4, %4, 25;\n\t" \
         " xor.b32            res1, t1, t2;\n\t" \
+        " add.s32            t1, %7, res1;\n\t"   /* t1 = h + res1 */ \
+        " add.s32            t1, t1, %8;\n\t"     /* t1 = h + res1 + km */ \
+        " not.b32            t2, %4;\n\t"         /* t2 = ~e */ \
+        " and.b32            t2, t2, %6;\n\t"     /* t2 = (~e & g) */ \
+        " and.b32            t3, %4, %5;\n\t"     /* t3 = (e & f) */ \
+        " xor.b32            t2, t2, t3;\n\t"     /* t2 = ((e & f) ^ (~e & g)) */ \
+        " add.s32            t1, t1, t2;\n\t"     /* t1 = h + res1 + km + ((e & f) ^ (~e & g)) */ \
+        " mov.u32            %7, %6;\n\t"         /* h = g */ \
+        " mov.u32            %6, %5;\n\t"         /* g = f */ \
+        " mov.u32            %5, %4;\n\t"         /* f = e */ \
+        " add.s32            %4, %3, t1;\n\t"     /* e = d + t1 */ \
+        " mov.u32            %3, %2;\n\t"         /* f = e */ \
+        " xor.b32            t3, %1, %2;\n\t"     /* t3 = (b ^ c) */ \
+        " and.b32            t3, %0, t3;\n\t"     /* t3 = a & (b ^ c) */ \
+        " and.b32            t2, %1, %2;\n\t"     /* t2 = (b & c) */ \
+        " xor.b32            t2, t2, t3;\n\t"     /* t2 = (a & (b ^ c)) ^ (b & c) */ \
+        " add.s32            t1, t1, res0;\n\t"   /* t1 = t1 + res0 */ \
+        " add.s32            t1, t1, t2;\n\t"     /* t1 = t1 + res0 + (a & (b ^ c)) ^ (b & c) */ \
+        " mov.u32            %2, %1;\n\t"         /* c = b */ \
+        " mov.u32            %1, %0;\n\t"         /* b = a */ \
+        " mov.u32            %0, t1;\n\t"         /* a = t1 */ \
         "}" \
-        : "+r"(a), "+r"(b), "+r"(c), "+r"(d), "+r"(e), "+r"(f), "+r"(g), "+r"(h) : "r" (km));
+        : "+r"(a), "+r"(b), "+r"(c), "+r"(d), "+r"(e), "+r"(f), "+r"(g), "+r"(h) : "r"(km));
+/*             0        1        2        3        4        5        6        7         8  */
 
 #define step(h0,h1) \
   hi = h0; hii = h1; \
@@ -307,23 +331,95 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
       g = g0;
       h = h0;
 
-    //#pragma unroll 1
-      for (i = 0; i < 64; i++) {
-        ep0(a,res0)
-        ep1(e,res1)
+      for (i = 0; i < 64; i++) m[i] += k[i];
+      i = 0;
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
 
-        t1 = h + res1 + ((e & f) ^ (~e & g)) + k[i] + m[i];
-        h = g;
-        g = f;
-        f = e;
-        e = d + t1;
-        d = c;
-//        t1 += res0 + ((a & b) ^ (a & c) ^ (b & c));
-        t1 += res0 + ((a & (b ^ c)) ^ (b & c));
-        c = b;
-        b = a;
-        a = t1;
-      }
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[i++])
+
+//#pragma unroll 1
+//      for (i = 0; i < 64; i++) {
+//        res0 = k[i] + m[i];
+//        epp(a,b,c,d,e,f,g,h,res0)
+//        ep0(a,res0)
+//        ep1(e,res1)
+//
+//        t1 = h + res1 + ((e & f) ^ (~e & g)) + k[i] + m[i];
+//        h = g;
+//        g = f;
+//        f = e;
+//        e = d + t1;
+//        d = c;
+////        t1 += res0 + ((a & b) ^ (a & c) ^ (b & c));
+//        t1 += res0 + ((a & (b ^ c)) ^ (b & c));
+//        c = b;
+//        b = a;
+//        a = t1;
+//      }
 
       a += a0;
       b += b0;
