@@ -59,9 +59,10 @@ extern "C" {
       " shf.r.clamp.b32    t2, %1, %1, 19;\n\t" \
       " xor.b32            t1, t1, t2;\n\t" \
       " shr.u32            t2, %1, 10;\n\t" \
-      " xor.b32            %0, t1, t2;\n\t" \
+      " xor.b32            t1, t1, t2;\n\t" \
+      " add.s32            %0, %0, t1;\n\t" \
       "}" \
-    : "=r"(res) : "r" (x));
+    : "+r"(res) : "r" (x));
 
 /*  Macros sig0_1 is doing:
     res0 = (x >> 7) | (x << 25);
@@ -86,7 +87,7 @@ extern "C" {
 12. t1 = t1 ^ t2
 13. res = res + t1
  */
-#define sig0_1(x,y,res) \
+#define sig0_1(x,y,a,b,res) \
   asm("{\n\t" \
       " .reg .u32 t1;\n\t" \
       " .reg .u32 t2;\n\t" \
@@ -101,8 +102,10 @@ extern "C" {
       " shr.u32            t2, %2, 10;\n\t" \
       " xor.b32            t1, t1, t2;\n\t" \
       " add.s32            %0, %0, t1;\n\t" \
+      " add.s32            %0, %0, %3;\n\t" \
+      " add.s32            %0, %0, %4;\n\t" \
       "}" \
-    : "+r"(res) : "r"(x), "r"(y));
+    : "+r"(res) : "r"(x), "r"(y), "r"(a), "r"(b));
 
 /*  Macros ep0 is doing:
     res = (x >> 2) | (x << 30);
@@ -271,8 +274,8 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
   for (int i = 16 ; i < 21; ++i) {
 //    sig0(ctx_data[i - 15], res0)
 //    sig1(ctx_data[i - 2], res1)
-    sig0_1(ctx_data[i - 15], ctx_data[i - 2], res0)
-    ctx_data[i] = ctx_data[i - 7] + res0 + ctx_data[i - 16];
+    sig0_1(ctx_data[i - 15], ctx_data[i - 2], ctx_data[i - 7], ctx_data[i - 16], ctx_data[i])
+//    ctx_data[i] = ctx_data[i - 7] + res0 + ctx_data[i - 16];
   }
 #pragma unroll 1
   for (int i = 21 ; i < 27; ++i) {
@@ -311,15 +314,15 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
 
       for (i = 21 ; i < 27; ++i) {
     //    sig0(ctx_data[i - 15], res0)
-        sig1(m[i - 2], res1)
-        m[i] += res1;
+        sig1(m[i - 2], m[i])
+//        m[i] += res1;
       }
     //#pragma unroll 1
       for (i = 27 ; i < 64; ++i) {
 //        sig0(m[i - 15], res0)
 //        sig1(m[i - 2], res1)
-        sig0_1(m[i - 15], m[i - 2], res0)
-        m[i] = m[i - 7] + res0 + m[i - 16];
+        sig0_1(m[i - 15], m[i - 2], m[i - 7], m[i - 16], m[i])
+//        m[i] = m[i - 7] + res0 + m[i - 16];
       }
 
       a = a0;
