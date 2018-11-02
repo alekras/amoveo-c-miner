@@ -10,212 +10,7 @@ extern "C" {
   #include "sha256.h"
 }
 #include "sha256_gpu.h"
-
-/** MACROSES **/
-
-/*  Macros sig0 is doing:
-    res = (x >> 7) | (x << 25);
-    res ^= (x >>18) | (x << 14);
-    res ^= (x >> 3);
- assembler commands:
-1. temp reg t1,
-2. temp reg t2,
-3. t1 = x >> 7
-4. t2 = x >> 18
-5. t1 = t1 ^ t2
-6. t2 = x >> 3
-7. res = t1 ^ t2
- */
-#define sig0(x,res) \
-  asm("{\n\t" \
-      " .reg .u32 t1;\n\t" \
-      " .reg .u32 t2;\n\t" \
-      " shf.r.clamp.b32    t1, %1, %1, 7;\n\t" \
-      " shf.r.clamp.b32    t2, %1, %1, 18;\n\t" \
-      " xor.b32            t1, t1, t2;\n\t" \
-      " shr.u32            t2, %1, 3;\n\t" \
-      " xor.b32            %0, t1, t2;\n\t" \
-      "}" \
-    : "=r"(res) : "r" (x));
-
-/*  Macros sig1 is doing:
-    res = (x >> 17) | (x << 15);
-    res ^= (x >> 19) | (x << 13);
-    res ^= (x >> 10);
- assembler commands:
-1. temp reg t1,
-2. temp reg t2,
-3. t1 = x >> 17
-4. t2 = x >> 19
-5. t1 = t1 ^ t2
-6. t2 = x >> 10
-7. res = t1 ^ t2
- */
-#define sig1(x,res) \
-  asm("{\n\t" \
-      " .reg .u32 t1;\n\t" \
-      " .reg .u32 t2;\n\t" \
-      " shf.r.clamp.b32    t1, %1, %1, 17;\n\t" \
-      " shf.r.clamp.b32    t2, %1, %1, 19;\n\t" \
-      " xor.b32            t1, t1, t2;\n\t" \
-      " shr.u32            t2, %1, 10;\n\t" \
-      " xor.b32            t1, t1, t2;\n\t" \
-      " add.s32            %0, %0, t1;\n\t" \
-      "}" \
-    : "+r"(res) : "r" (x));
-
-/*  Macros sig0_1 is doing:
-    res0 = (x >> 7) | (x << 25);
-    res0 ^= (x >>18) | (x << 14);
-    res0 ^= (x >> 3);
-    res1 = (x >> 17) | (x << 15);
-    res1 ^= (x >> 19) | (x << 13);
-    res1 ^= (x >> 10);
-    res = res0 + res1
- assembler commands:
-1. temp reg t1,
-2. temp reg t2,
-3. t1 = x >> 7
-4. t2 = x >> 18
-5. t1 = t1 ^ t2
-6. t2 = x >> 3
-7. res = t1 ^ t2
-8. t1 = x >> 17
-9. t2 = x >> 19
-10. t1 = t1 ^ t2
-11. t2 = x >> 10
-12. t1 = t1 ^ t2
-13. res = res + t1
- */
-#define sig0_1(x,y,a,b,res) \
-  asm("{\n\t" \
-      " .reg .u32 t1;\n\t" \
-      " .reg .u32 t2;\n\t" \
-      " shf.r.clamp.b32    t1, %1, %1, 7;\n\t" \
-      " shf.r.clamp.b32    t2, %1, %1, 18;\n\t" \
-      " xor.b32            t1, t1, t2;\n\t" \
-      " shr.u32            t2, %1, 3;\n\t" \
-      " xor.b32            %0, t1, t2;\n\t" \
-      " shf.r.clamp.b32    t1, %2, %2, 17;\n\t" \
-      " shf.r.clamp.b32    t2, %2, %2, 19;\n\t" \
-      " xor.b32            t1, t1, t2;\n\t" \
-      " shr.u32            t2, %2, 10;\n\t" \
-      " xor.b32            t1, t1, t2;\n\t" \
-      " add.s32            %0, %0, t1;\n\t" \
-      " add.s32            %0, %0, %3;\n\t" \
-      " add.s32            %0, %0, %4;\n\t" \
-      "}" \
-    : "+r"(res) : "r"(x), "r"(y), "r"(a), "r"(b));
-
-/*  Macros ep0 is doing:
-    res = (x >> 2) | (x << 30);
-    res ^= (x >> 13) | (x << 19);
-    res ^= (x >> 22) | (x << 10);
- assembler commands:
-1. temp reg t1,
-2. temp reg t2,
-3. t1 = x >> 2
-4. t2 = x >> 13
-5. t1 = t1 ^ t2
-6. t2 = x >> 22
-7. res = t1 ^ t2
- */
-#define ep0(x,res) \
-    asm("{\n\t" \
-        " .reg .u32 t1;\n\t" \
-        " .reg .u32 t2;\n\t" \
-        " shf.r.clamp.b32    t1, %1, %1, 2;\n\t" \
-        " shf.r.clamp.b32    t2, %1, %1, 13;\n\t" \
-        " xor.b32            t1, t1, t2;\n\t" \
-        " shf.r.clamp.b32    t2, %1, %1, 22;\n\t" \
-        " xor.b32            %0, t1, t2;\n\t" \
-        "}" \
-        : "=r"(res) : "r" (x));
-
-/*  Macros ep1 is doing:
-    res = (x >> 6) | (x << 26);
-    res ^= (x >> 11) | (x << 21);
-    res ^= (x >> 25) | (x << 7);
- assembler commands:
-1. temp reg t1,
-2. temp reg t2,
-3. t1 = x >> 6
-4. t2 = x >> 11
-5. t1 = t1 ^ t2
-6. t2 = x >> 25
-7. res = t1 ^ t2
- */
-#define ep1(x,res) \
-    asm("{\n\t" \
-        " .reg .u32 t1;\n\t" \
-        " .reg .u32 t2;\n\t" \
-        " shf.r.clamp.b32    t1, %1, %1, 6;\n\t" \
-        " shf.r.clamp.b32    t2, %1, %1, 11;\n\t" \
-        " xor.b32            t1, t1, t2;\n\t" \
-        " shf.r.clamp.b32    t2, %1, %1, 25;\n\t" \
-        " xor.b32            %0, t1, t2;\n\t" \
-        "}" \
-        : "=r"(res) : "r"(x));
-
-#define epp(a,b,c,d,e,f,g,h,km) \
-    asm("{\n\t" \
-        " .reg .u32 t1;\n\t" \
-        " .reg .u32 t2;\n\t" \
-        " .reg .u32 t3;\n\t" \
-        " .reg .u32 res0;\n\t" \
-        " .reg .u32 res1;\n\t" \
-        " shf.r.clamp.b32    t1, %0, %0, 2;\n\t" \
-        " shf.r.clamp.b32    t2, %0, %0, 13;\n\t" \
-        " xor.b32            t1, t1, t2;\n\t" \
-        " shf.r.clamp.b32    t2, %0, %0, 22;\n\t" \
-        " xor.b32            res0, t1, t2;\n\t" \
- \
-        " shf.r.clamp.b32    t1, %4, %4, 6;\n\t" \
-        " shf.r.clamp.b32    t2, %4, %4, 11;\n\t" \
-        " xor.b32            t1, t1, t2;\n\t" \
-        " shf.r.clamp.b32    t2, %4, %4, 25;\n\t" \
-        " xor.b32            res1, t1, t2;\n\t" \
-        " add.s32            t1, %7, res1;\n\t"   /* t1 = h + res1 */ \
-        " add.s32            t1, t1, %8;\n\t"     /* t1 = h + res1 + km */ \
-        " not.b32            t2, %4;\n\t"         /* t2 = ~e */ \
-        " and.b32            t2, t2, %6;\n\t"     /* t2 = (~e & g) */ \
-        " and.b32            t3, %4, %5;\n\t"     /* t3 = (e & f) */ \
-        " xor.b32            t2, t2, t3;\n\t"     /* t2 = ((e & f) ^ (~e & g)) */ \
-        " add.s32            t1, t1, t2;\n\t"     /* t1 = h + res1 + km + ((e & f) ^ (~e & g)) */ \
-        " mov.u32            %7, %6;\n\t"         /* h = g */ \
-        " mov.u32            %6, %5;\n\t"         /* g = f */ \
-        " mov.u32            %5, %4;\n\t"         /* f = e */ \
-        " add.s32            %4, %3, t1;\n\t"     /* e = d + t1 */ \
-        " mov.u32            %3, %2;\n\t"         /* f = e */ \
-        " xor.b32            t3, %1, %2;\n\t"     /* t3 = (b ^ c) */ \
-        " and.b32            t3, %0, t3;\n\t"     /* t3 = a & (b ^ c) */ \
-        " and.b32            t2, %1, %2;\n\t"     /* t2 = (b & c) */ \
-        " xor.b32            t2, t2, t3;\n\t"     /* t2 = (a & (b ^ c)) ^ (b & c) */ \
-        " add.s32            t1, t1, res0;\n\t"   /* t1 = t1 + res0 */ \
-        " add.s32            t1, t1, t2;\n\t"     /* t1 = t1 + res0 + (a & (b ^ c)) ^ (b & c) */ \
-        " mov.u32            %2, %1;\n\t"         /* c = b */ \
-        " mov.u32            %1, %0;\n\t"         /* b = a */ \
-        " mov.u32            %0, t1;\n\t"         /* a = t1 */ \
-        "}" \
-        : "+r"(a), "+r"(b), "+r"(c), "+r"(d), "+r"(e), "+r"(f), "+r"(g), "+r"(h) : "r"(km));
-/*             0        1        2        3        4        5        6        7         8  */
-
-#define step(h0,h1) \
-  hi = h0; hii = h1; \
-  for (int j = 0; j < 32; j++) { \
-    if ( (hi & mask) == 0 ) { \
-      our_diff++; \
-      hi <<= 1; \
-    } else { \
-      our_diff *= 256; \
-      if (j == 31) { \
-        our_diff += hii >> 24; \
-      } else { \
-        our_diff += (hi >> 23) & 0xff; \
-        if (j > 23) { our_diff += (hii >> (56 - j)); } \
-      } \
-      goto end; \
-    }}
+#include "macros.h"
 
 //Constants for SHA-256
 __device__ __constant__ static const WORD k[64] = {
@@ -243,12 +38,10 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
   WORD i, j, our_diff;
   long int r;
   long int idx = blockIdx.x * blockDim.x + threadIdx.x;
-//  AMO_SHA256_CTX ctx;
   WORD ctx_data[27];
-//  WORD ctx_state[8];
-  WORD res0, res1;
+  WORD res0;
   WORD m[64];
-  WORD a, b, c, d, e, f, g, h, t1;
+  WORD a, b, c, d, e, f, g, h;
 //  WORD *m = &shared_memory[64 * threadIdx.x];
 
   #pragma unroll 1
@@ -272,15 +65,11 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
 
 #pragma unroll 1
   for (int i = 16 ; i < 21; ++i) {
-//    sig0(ctx_data[i - 15], res0)
-//    sig1(ctx_data[i - 2], res1)
     sig0_1(ctx_data[i - 15], ctx_data[i - 2], ctx_data[i - 7], ctx_data[i - 16], ctx_data[i])
-//    ctx_data[i] = ctx_data[i - 7] + res0 + ctx_data[i - 16];
   }
 #pragma unroll 1
   for (int i = 21 ; i < 27; ++i) {
     sig0(ctx_data[i - 15], res0)
-//    sig1(ctx_data[i - 2], res1)
     ctx_data[i] = ctx_data[i - 7] + res0 + ctx_data[i - 16];
   }
 
@@ -304,26 +93,59 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
     ctx_data[26]++; // depends on [19] -> [12]
 
     r++;
-//    sha256_init(ctx_state);
-//    sha256_transform(ctx_data, ctx_state);
-//    __device__ void sha256_transform(WORD *ctx_data, WORD *ctx_state) {
     {
-    //#pragma unroll 1
       for (i = 0; i < 27; ++i)
         m[i] = ctx_data[i];
 
-      for (i = 21 ; i < 27; ++i) {
-    //    sig0(ctx_data[i - 15], res0)
-        sig1(m[i - 2], m[i])
-//        m[i] += res1;
-      }
-    //#pragma unroll 1
-      for (i = 27 ; i < 64; ++i) {
-//        sig0(m[i - 15], res0)
-//        sig1(m[i - 2], res1)
-        sig0_1(m[i - 15], m[i - 2], m[i - 7], m[i - 16], m[i])
-//        m[i] = m[i - 7] + res0 + m[i - 16];
-      }
+//      for (i = 21 ; i < 27; ++i) {
+//        sig1(m[i - 2], m[i])
+      sig1(m[19], m[21])
+      sig1(m[20], m[22])
+      sig1(m[21], m[23])
+      sig1(m[22], m[24])
+      sig1(m[23], m[25])
+      sig1(m[24], m[26])
+//      }
+//      for (i = 27 ; i < 64; ++i) {
+//        sig0_1(m[i - 15], m[i - 2], m[i - 7], m[i - 16], m[i])
+      sig0_1(m[12], m[25], m[20], m[11], m[27])
+      sig0_1(m[13], m[26], m[21], m[12], m[28])
+      sig0_1(m[14], m[27], m[22], m[13], m[29])
+      sig0_1(m[15], m[28], m[23], m[14], m[30])
+      sig0_1(m[16], m[29], m[24], m[15], m[31])
+      sig0_1(m[17], m[30], m[25], m[16], m[32])
+      sig0_1(m[18], m[31], m[26], m[17], m[33])
+      sig0_1(m[19], m[32], m[27], m[18], m[34])
+      sig0_1(m[20], m[33], m[28], m[19], m[35])
+      sig0_1(m[21], m[34], m[29], m[20], m[36])
+      sig0_1(m[22], m[35], m[30], m[21], m[37])
+      sig0_1(m[23], m[36], m[31], m[22], m[38])
+      sig0_1(m[24], m[37], m[32], m[23], m[39])
+      sig0_1(m[25], m[38], m[33], m[24], m[40])
+      sig0_1(m[26], m[39], m[34], m[25], m[41])
+      sig0_1(m[27], m[40], m[35], m[26], m[42])
+      sig0_1(m[28], m[41], m[36], m[27], m[43])
+      sig0_1(m[29], m[42], m[37], m[28], m[44])
+      sig0_1(m[30], m[43], m[38], m[29], m[45])
+      sig0_1(m[31], m[44], m[39], m[30], m[46])
+      sig0_1(m[32], m[45], m[40], m[31], m[47])
+      sig0_1(m[33], m[46], m[41], m[32], m[48])
+      sig0_1(m[34], m[47], m[42], m[33], m[49])
+      sig0_1(m[35], m[48], m[43], m[34], m[50])
+      sig0_1(m[36], m[49], m[44], m[35], m[51])
+      sig0_1(m[37], m[50], m[45], m[36], m[52])
+      sig0_1(m[38], m[51], m[46], m[37], m[53])
+      sig0_1(m[39], m[52], m[47], m[38], m[54])
+      sig0_1(m[40], m[53], m[48], m[39], m[55])
+      sig0_1(m[41], m[54], m[49], m[40], m[56])
+      sig0_1(m[42], m[55], m[50], m[41], m[57])
+      sig0_1(m[43], m[56], m[51], m[42], m[58])
+      sig0_1(m[44], m[57], m[52], m[43], m[59])
+      sig0_1(m[45], m[58], m[53], m[44], m[60])
+      sig0_1(m[46], m[59], m[54], m[45], m[61])
+      sig0_1(m[47], m[60], m[55], m[46], m[62])
+      sig0_1(m[48], m[61], m[56], m[47], m[63])
+//      }
 
       a = a0;
       b = b0;
@@ -335,94 +157,74 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
       h = h0;
 
       for (i = 0; i < 64; i++) m[i] += k[i];
-      i = 0;
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
 
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[ 0])
+      epp(a,b,c,d,e,f,g,h,m[ 1])
+      epp(a,b,c,d,e,f,g,h,m[ 2])
+      epp(a,b,c,d,e,f,g,h,m[ 3])
+      epp(a,b,c,d,e,f,g,h,m[ 4])
+      epp(a,b,c,d,e,f,g,h,m[ 5])
+      epp(a,b,c,d,e,f,g,h,m[ 6])
+      epp(a,b,c,d,e,f,g,h,m[ 7])
+      epp(a,b,c,d,e,f,g,h,m[ 8])
+      epp(a,b,c,d,e,f,g,h,m[ 9])
+      epp(a,b,c,d,e,f,g,h,m[10])
+      epp(a,b,c,d,e,f,g,h,m[11])
+      epp(a,b,c,d,e,f,g,h,m[12])
+      epp(a,b,c,d,e,f,g,h,m[13])
+      epp(a,b,c,d,e,f,g,h,m[14])
+      epp(a,b,c,d,e,f,g,h,m[15])
 
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[16])
+      epp(a,b,c,d,e,f,g,h,m[17])
+      epp(a,b,c,d,e,f,g,h,m[18])
+      epp(a,b,c,d,e,f,g,h,m[19])
+      epp(a,b,c,d,e,f,g,h,m[20])
+      epp(a,b,c,d,e,f,g,h,m[21])
+      epp(a,b,c,d,e,f,g,h,m[22])
+      epp(a,b,c,d,e,f,g,h,m[23])
+      epp(a,b,c,d,e,f,g,h,m[24])
+      epp(a,b,c,d,e,f,g,h,m[25])
+      epp(a,b,c,d,e,f,g,h,m[26])
+      epp(a,b,c,d,e,f,g,h,m[27])
+      epp(a,b,c,d,e,f,g,h,m[28])
+      epp(a,b,c,d,e,f,g,h,m[29])
+      epp(a,b,c,d,e,f,g,h,m[30])
+      epp(a,b,c,d,e,f,g,h,m[31])
 
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
-      epp(a,b,c,d,e,f,g,h,m[i++])
+      epp(a,b,c,d,e,f,g,h,m[32])
+      epp(a,b,c,d,e,f,g,h,m[33])
+      epp(a,b,c,d,e,f,g,h,m[34])
+      epp(a,b,c,d,e,f,g,h,m[35])
+      epp(a,b,c,d,e,f,g,h,m[36])
+      epp(a,b,c,d,e,f,g,h,m[37])
+      epp(a,b,c,d,e,f,g,h,m[38])
+      epp(a,b,c,d,e,f,g,h,m[39])
+      epp(a,b,c,d,e,f,g,h,m[40])
+      epp(a,b,c,d,e,f,g,h,m[41])
+      epp(a,b,c,d,e,f,g,h,m[42])
+      epp(a,b,c,d,e,f,g,h,m[43])
+      epp(a,b,c,d,e,f,g,h,m[44])
+      epp(a,b,c,d,e,f,g,h,m[45])
+      epp(a,b,c,d,e,f,g,h,m[46])
+      epp(a,b,c,d,e,f,g,h,m[47])
 
-//#pragma unroll 1
-//      for (i = 0; i < 64; i++) {
-//        res0 = k[i] + m[i];
-//        epp(a,b,c,d,e,f,g,h,res0)
-//        ep0(a,res0)
-//        ep1(e,res1)
-//
-//        t1 = h + res1 + ((e & f) ^ (~e & g)) + k[i] + m[i];
-//        h = g;
-//        g = f;
-//        f = e;
-//        e = d + t1;
-//        d = c;
-////        t1 += res0 + ((a & b) ^ (a & c) ^ (b & c));
-//        t1 += res0 + ((a & (b ^ c)) ^ (b & c));
-//        c = b;
-//        b = a;
-//        a = t1;
-//      }
+      epp(a,b,c,d,e,f,g,h,m[48])
+      epp(a,b,c,d,e,f,g,h,m[49])
+      epp(a,b,c,d,e,f,g,h,m[50])
+      epp(a,b,c,d,e,f,g,h,m[51])
+      epp(a,b,c,d,e,f,g,h,m[52])
+      epp(a,b,c,d,e,f,g,h,m[53])
+      epp(a,b,c,d,e,f,g,h,m[54])
+      epp(a,b,c,d,e,f,g,h,m[55])
+      epp(a,b,c,d,e,f,g,h,m[56])
+      epp(a,b,c,d,e,f,g,h,m[57])
+      epp(a,b,c,d,e,f,g,h,m[58])
+      epp(a,b,c,d,e,f,g,h,m[59])
+      epp(a,b,c,d,e,f,g,h,m[60])
+      epp(a,b,c,d,e,f,g,h,m[61])
+      epp(a,b,c,d,e,f,g,h,m[62])
+      epp(a,b,c,d,e,f,g,h,m[63])
 
       a += a0;
       b += b0;
@@ -450,7 +252,6 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
 //      step(g, h)
     }
     end:
-//    work = hash2int_w();
     if( our_diff > difficulty) {
       *success = true;
       *stop = true;
