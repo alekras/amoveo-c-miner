@@ -2,6 +2,8 @@
 %% @doc @todo Add description to miner_serv.
 
 -module(miner_serv).
+-include("miner.hrl").
+
 -behaviour(gen_server).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
@@ -9,27 +11,6 @@
 %% API functions
 %% ====================================================================
 -export([start/0]).
-
--define(Peer, "http://159.65.120.84:8085").
--define(Pubkey, <<"BGv90RwK8L4OBSbl+6SUuyWSQVdkVDIOJY0i1wpWZINMTIBAM9/z3bOejY/LXm2AtA/Ibx4C7eeTJ+q0vhU9xlA=">>). %% 88 bytes 704 bits
--define(PORT_NAME, amoveo_c_miner).
--define(USE_SHARE_POOL, true).
--define(CORES, 2).
--ifdef(MACOS).
-  -define(Treshold, 7).%how long to wait in seconds before checking if new mining data is available.
-  -define(Treshold_1, 2).
-  -define(TracePeriod_1, 1).%how long to wait in seconds while checking for success in GPU.
-  -define(TracePeriod_2, 1).%how long to wait in seconds while checking for changing mining data.
-  -define(Pool_sleep_period, 1).%How long to wait in miliseconds if we cannot connect to the mining pool.
-  -define(HTTPC, httpc_mock).
--else.
-  -define(Treshold, 56).%how long to wait in seconds before checking if new mining data is available.
-  -define(Treshold_1, 10).
-  -define(TracePeriod_1, 2).%how long to wait in seconds while checking for success in GPU.
-  -define(TracePeriod_2, 1).%how long to wait in seconds while checking for changing mining data.
-  -define(Pool_sleep_period, 1000).%How long to wait in miliseconds if we cannot connect to the mining pool.
-  -define(HTTPC, httpc).
--endif.
 
 start() ->
   lager:start(),
@@ -41,14 +22,6 @@ start() ->
 %% ====================================================================
 %% Behavioural functions
 %% ====================================================================
--record(state, {
-  ports::list(),
-  given_hash::binary(),
-  difficulty::integer(),
-  command::list(),
-  msg_count::integer(),
-  period::integer()
-}).
 
 %% init/1
 %% ====================================================================
@@ -64,7 +37,6 @@ start() ->
 %% ====================================================================
 init([]) ->
   Ports = [start_port(I) || I <- lists:seq(0, ?CORES - 1)],
-%  timer:send_after(10, miner, first_step),
   timer:apply_after(10, gen_server, cast, [miner, first_step]),
   {ok, #state{ports = Ports}}.
 
@@ -90,17 +62,6 @@ start_port(N) ->
 	Timeout :: non_neg_integer() | infinity,
 	Reason :: term().
 %% ====================================================================
-%% handle_call(first_step, _From, State) ->
-%%   {F, BD, _SD} = ask_for_work(),
-%%   lager:debug(" ASK for work: Hash:~256p Diff:~p / ~p~n", [F, BD, _SD]),
-%%   RS = crypto:strong_rand_bytes(23),
-%%   [Port ! {self(), {command, <<"I", F/binary, RS/binary, BD:32/integer, _SD:32/integer, Core_id:32/integer>>}} || {Port, Core_id} <- State#state.ports],
-%%   {reply, ok, State#state{command = <<"I">>, given_hash = F, difficulty = BD, msg_count = (?CORES - 1), period = ?Treshold}};
-%% 
-%% handle_call(new_step, _From, #state{given_hash = F, difficulty = BD} = State) ->
-%%   RS = crypto:strong_rand_bytes(23),
-%%   [Port ! {self(), {command, <<"I", F/binary, RS/binary, BD:32/integer, BD:32/integer, Core_id:32/integer>>}} || {Port, Core_id} <- State#state.ports],
-%%   {reply, ok, State#state{command = <<"I">>, msg_count = (?CORES - 1)}};
 
 handle_call(_Request, _From, State) ->
   Reply = ok,
@@ -118,15 +79,31 @@ handle_call(_Request, _From, State) ->
 	Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
 handle_cast(first_step, State) ->
+  R1 = application:unload(miner_conf),
+  lager:debug("After app unload. R1=~p~n", [R1]),
+  R2 = application:load(miner_conf),
+  lager:debug("After app load.   R2=~p~n", [R2]),
+  GDIM = application:get_env(miner_conf, gdim, 32),
+  BDIM = application:get_env(miner_conf, bdim, 96),
+  lager:info("  GDIM= ~p,  BDIM= ~p.~n", [GDIM, BDIM]),
+
   {F, BD, _SD} = ask_for_work(),
   lager:debug(" ASK for work: Hash:~256p Diff:~p / ~p~n", [F, BD, _SD]),
   RS = crypto:strong_rand_bytes(23),
-  [Port ! {self(), {command, <<"I", F/binary, RS/binary, BD:32/integer, _SD:32/integer, Core_id:32/integer>>}} || {Port, Core_id} <- State#state.ports],
+  [Port ! {self(), {command, <<"I", F/binary, RS/binary, BD:32/integer, GDIM:32/integer, BDIM:32/integer>>}} || {Port, _} <- State#state.ports],
   {noreply, State#state{command = <<"I">>, given_hash = F, difficulty = BD, msg_count = (?CORES - 1), period = ?Treshold}};
 
 handle_cast(new_step, #state{given_hash = F, difficulty = BD} = State) ->
+  R1 = application:unload(miner_conf),
+  lager:debug("After app unload. R1=~p~n", [R1]),
+  R2 = application:load(miner_conf),
+  lager:debug("After app load.   R2=~p~n", [R2]),
+  GDIM = application:get_env(miner_conf, gdim, 32),
+  BDIM = application:get_env(miner_conf, bdim, 96),
+  lager:info("  GDIM= ~p,  BDIM= ~p.~n", [GDIM, BDIM]),
+
   RS = crypto:strong_rand_bytes(23),
-  [Port ! {self(), {command, <<"I", F/binary, RS/binary, BD:32/integer, BD:32/integer, Core_id:32/integer>>}} || {Port, Core_id} <- State#state.ports],
+  [Port ! {self(), {command, <<"I", F/binary, RS/binary, BD:32/integer, GDIM:32/integer, BDIM:32/integer>>}} || {Port, _} <- State#state.ports],
   {noreply, State#state{command = <<"I">>, msg_count = (?CORES - 1)}};
 
 handle_cast(_Msg, State) ->
@@ -143,35 +120,35 @@ handle_cast(_Msg, State) ->
 	NewState :: term(),
 	Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
-handle_info(tick, #state{period = Period} = State) ->
-  lager:info("  tick 1 arrives.~n", []),
+handle_info(tick, State) ->
+  lager:info("  tick arrives.~n", []),
   [Port ! {self(), {command, <<"U">>}} || {Port, _Core_id} <- State#state.ports],
   {noreply, State#state{command = <<"U">>, msg_count = (?CORES - 1)}};
 
 handle_info({Port, {data, <<"I">>}}, #state{msg_count = 0} = State) ->
-  lager:info("  Command ~p response from port[~p].", ["I", Port]),
+  lager:info("  All ports have responded to command ~p. Last port responded is [~p].", ["I", Port]),
   self() ! tick, 
   {noreply, State};
 
 handle_info({Port, {data, <<"U">>}}, #state{msg_count = 0, period = Period} = State)  when Period < ?Treshold ->
-  lager:info("  Command ~p response from port[~p]. Period = ~p", ["U", Port, Period]),
+  lager:info("  All ports have responded to command ~p. Last port responded is [~p]. Period = ~p", ["U", Port, Period]),
   timer:send_after(?TracePeriod_1 * 1000, self(), tick),
   {noreply, State#state{period = (Period + ?TracePeriod_1)}};
 
 handle_info({Port, {data, <<"U">>}}, #state{msg_count = 0, period = Period} = State) ->
-  lager:info("  Command ~p response from port[~p]. Period = ~p", ["U", Port, Period]),
+  lager:info("  All ports have responded to command ~p. Last port responded is [~p]. Period( ~p) >= Threshold( ~p).", ["U", Port, Period, ?Treshold]),
   {F, BD, SD} = ask_for_work(),
   lager:debug("#~2.2.0w ask for work: Hash:~256p Diff:~p / ~p~n", [Period, F, BD, SD]),
   if F =:= State#state.given_hash ->
     timer:send_after(?TracePeriod_2 * 1000, self(), tick),
-    {noreply, State#state{given_hash = F, difficulty = BD, msg_count = (?CORES - 1), period = (Period + ?TracePeriod_2)}};
+    {noreply, State#state{period = (Period + ?TracePeriod_2)}};
   true ->
     [Port ! {self(), {command, <<"S">>}} || {Port, _Core_id} <- State#state.ports],
     {noreply, State#state{command = <<"S">>, given_hash = F, difficulty = BD, msg_count = (?CORES - 1)}}
   end;
 
 handle_info({Port, {data, <<"S">>}}, #state{msg_count = 0, period = Period} = State) ->
-  lager:info("  Command ~p response from port[~p].", ["S", Port]),
+  lager:info("  All ports have responded to command ~p. Last port responded is [~p].", ["S", Port]),
   if Period =:= ?Treshold ->
     gen_server:cast(self(), new_step),
     {noreply, State#state{period = ?Treshold_1}};
@@ -204,7 +181,7 @@ handle_info({Port, {data, <<1:8, Nonce:23/binary, _Hash:32/binary>>}}, State) ->
   end;
 
 handle_info({Port, {data, Command}}, State) ->
-  lager:info("  Command ~p response from port[~p].", [Command, Port]),
+  lager:info("  Port have responsed to command ~p. The response comes from port[~p].", [Command, Port]),
   {noreply, State#state{msg_count = (State#state.msg_count - 1)}};
 
 handle_info(_Info, State) ->

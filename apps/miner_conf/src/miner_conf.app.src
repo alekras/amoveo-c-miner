@@ -1,0 +1,13 @@
+{application, miner_conf,
+ [
+  {description, "Fake application for dynamically (on fly) change miner configuration."},
+  {vsn, "0.0.1"},
+  {registered, []},
+  {applications, []},
+  {modules, []},
+  {mod, {miner_conf, []}},
+  {env, [
+    {gdim, 32},
+    {bdim, 96}
+  ]}
+ ]}.

@@ -26,7 +26,7 @@ char amoveo_update_gpu(BYTE *nonce, BYTE *data) {
   fprintf(fdebug,"---- Update: data and nonce \n");
   fflush(fdebug);
   count++;
-  if ((count % 5) == 0) {
+  if ((count % 25) == 0) {
     for (int i = 0; i < 23; i++) {
       nonce[i] = i;
     }

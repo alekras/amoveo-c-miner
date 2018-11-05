@@ -115,7 +115,7 @@ extern "C" void amoveo_stop_gpu() {
   gettimeofday(&t_end, NULL);
 
   long long int total = 0;
-  long int min_cycles = 10000000, max_cycles = 0, zero_cycles = 0;
+  long int min_cycles = 1000000000, max_cycles = 0, zero_cycles = 0;
   for(int i = 0; i < (GDIM * BDIM); i++) {
     long int temp = h_cycles_total[i];
     if (temp == 0) {
@@ -343,7 +343,7 @@ extern "C" void test1(int device, int difficulty, int gdim, int bdim, BYTE data[
     gettimeofday(&t_end, NULL);
 
     long long int total = 0;
-    long int min_cycles = 10000000, max_cycles = 0, zero_cycles = 0;
+    long int min_cycles = 1000000000, max_cycles = 0, zero_cycles = 0;
     for(int i = 0; i < (gdim * bdim); i++) {
       long int temp = h_cycles_total[i];
       if (temp == 0) {
