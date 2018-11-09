@@ -19,7 +19,8 @@ rm *.o
 # finally start an erlang interpreter so you can call the program.
 erl -pa _build/default/lib/*/ebin \
  -config miner \
- -eval "miner:start()"
+ -eval "miner:start()" \
+ -detached
 
 # run like this `miner:start()`
 

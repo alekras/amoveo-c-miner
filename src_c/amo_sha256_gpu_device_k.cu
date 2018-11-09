@@ -242,8 +242,8 @@ __global__ void kernel_sha256(BYTE *data, WORD difficulty, BYTE *nonce, volatile
     }
     {
       WORD hi, hii, mask = 0x80000000;
-      our_diff = 0;
-      step(a, b)
+      our_diff = 32;
+//      step(a, b)
       step(b, c)
       step(c, d)
 //      step(d, e)

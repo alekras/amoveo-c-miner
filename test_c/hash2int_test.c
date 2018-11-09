@@ -58,7 +58,7 @@ WORD h2i_rvs(BYTE h[32]) {
   return our_diff;
 }
 
-WORD h2i_w(WORD h[8]) {
+WORD h2i_w_old(WORD h[8]) {
   WORD our_diff = 0;
 
   for(int i = 0; i < 8; i++) {
@@ -90,6 +90,137 @@ WORD h2i_w(WORD h[8]) {
   }
   return our_diff;
 }
+
+WORD h2i_w(WORD h[8]) {
+  WORD our_diff = 0;
+
+  for(int i = 0; i < 8; i++) {
+    WORD mask = 0xffff0000;
+    int j = 16; // 2^4
+    our_diff+= 16;
+//    for(int k = 0; k < 5; k++) {
+      if ( (h[i] & mask) == 0 ) {  // k = 0
+        j+= 8;
+        mask = mask >> 8;
+      } else {
+        j-=8;
+        mask = mask << 8;
+      }
+      if ( (h[i] & mask) == 0 ) {  // k = 1
+        j+= 4;
+        mask = mask >> 4;
+      } else {
+        j-=4;
+        mask = mask << 4;
+      }
+      if ( (h[i] & mask) == 0 ) {  // k = 2
+        j+= 2;
+        mask = mask >> 2;
+      } else {
+        j-=2;
+        mask = mask << 2;
+      }
+      if ( (h[i] & mask) == 0 ) {  // k = 3
+        j+= 1;
+        mask = mask >> 1;
+      } else {
+        j-=1;
+        mask = mask << 1;
+      }
+      if ( (h[i] & mask) == 0 ) {  // k = 4
+//        our_diff+= 1;
+//        mask = mask >> 1;
+      } else {
+//        our_diff-=1;
+//        mask = mask << 1;
+      }
+//    }
+
+
+
+      main()
+      {
+          int h = 0x70000000;
+          int mask = 0xffffffff;
+          int j = 32; // 2^4
+          printf(" %08X  %08X %d\n", h, mask, j);
+          if ( (h & mask) == 0 ) {  // k = 0
+          printf("Stop: %08X  %08X %d\n", h, mask, j);
+             return;
+          } else {
+             j-=16;
+             mask = mask << 16;
+          }
+          printf(" %08X  %08X %d\n", h, mask, j);
+          if ( (h & mask) == 0 ) {  // k = 1
+             j+= 8;
+             mask = mask >> 8;
+          } else {
+             j-=8;
+             mask = mask << 8;
+          }
+          printf(" %08X  %08X %d\n", h, mask, j);
+          if ( (h & mask) == 0 ) {  // k = 2
+             j+= 4;
+             mask = mask >> 4;
+          } else {
+             j-=4;
+             mask = mask << 4;
+          }
+          printf(" %08X  %08X %d\n", h, mask, j);
+          if ( (h & mask) == 0 ) {  // k = 3
+             j+= 2;
+             mask = mask >> 2;
+          } else {
+             j-=2;
+             mask = mask << 2;
+          }
+          printf(" %08X  %08X %d\n", h, mask, j);
+          if ( (h & mask) == 0 ) {  // k = 4
+            j+= 1;
+            mask = mask >> 1;
+          } else {
+            j-=1;
+            mask = mask << 1;
+            if ( (h & mask) == 0 ) {
+              printf("Stop: %08X  %08X %d\n", h, mask, j);
+              return;
+            } else {
+              j = 0;
+            }
+          }
+          printf("Final: %08X  %08X %d\n", h, mask, j);
+
+      }
+
+
+
+
+
+      {
+        our_diff *= 256;
+//        printf(" 0) %d  ", our_diff );
+        if (j == 31) {
+          j = 0;
+          i++;
+        } else {
+          j++;
+        }
+        if ((24 - j) >= 0) {
+          our_diff += (h[i] >> (24 -j)) & 0xff;
+//          printf(" 1) %08X  %08X\n",h[i], (h[i] >> (24 -j)) & 0xff );
+        } else {
+//          WORD t = ((h[i + 1] >> 1) & 0x7FFFFFFF) >> (55 - j);
+          our_diff += ((h[i] << (j - 24)) + (((h[i + 1] >> 1) & 0x7FFFFFFF) >> (55 - j)));
+//          printf(" 2) %08X  %08X  %08X\n",h[i], (h[i] << (j - 24)), (((h[i + 1] >> 1) & 0x7FFFFFFF) >> (55 - j)));
+        }
+        return our_diff;
+      }
+    }
+  }
+  return our_diff;
+}
+
 #define step0(hi,hii) \
   for(int j = 31; j >= 0; j--) { \
     if ( (hi >> j) == 0 ) { \
